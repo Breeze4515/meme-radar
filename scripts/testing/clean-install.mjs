@@ -1,0 +1,32 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import assert from 'node:assert/strict';
+const exec = promisify(execFile);
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'meme-radar-clean-install-'));
+const files = ['package.json', 'package-lock.json', 'src', 'public', 'scripts/setup.mjs', 'scripts/open.mjs', 'scripts/supervise.mjs', 'scripts/bootstrap-node.sh', '安装并启动.command', 'start-radar.command', 'open-radar.command'];
+for (const item of files) {
+  const target = path.join(temporary, item);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.cpSync(path.join(root, item), target, { recursive: true });
+}
+const env = { ...process.env, RADAR_USE_BUNDLED_NODE: '1' };
+for (const key of Object.keys(env)) if (key.startsWith('GMGN_')) delete env[key];
+console.log(`安装测试目录：${temporary}`);
+const { stdout } = await exec('/bin/bash', [path.join(temporary, 'scripts/bootstrap-node.sh')], { cwd: temporary, env, timeout: 420000 });
+const node = stdout.trim();
+assert.ok(node.startsWith(path.join(temporary, '.runtime')));
+console.log('独立 Node 已下载并通过 SHA-256 校验。');
+const setup = await exec(node, [path.join(temporary, 'scripts/setup.mjs')], { cwd: temporary, env, timeout: 240000 });
+console.log(setup.stdout.trim());
+const installed = JSON.parse(fs.readFileSync(path.join(temporary, 'node_modules/gmgn-cli/package.json'), 'utf8'));
+assert.equal(installed.version, '1.5.7');
+const check = await exec(node, [path.join(temporary, 'scripts/setup.mjs'), '--check'], { cwd: temporary, env, timeout: 10000 });
+assert.match(check.stdout, /运行环境已就绪/);
+assert.equal(fs.existsSync(path.join(temporary, 'state')), false);
+assert.equal(fs.existsSync(path.join(temporary, 'logs')), false);
+console.log('干净安装通过：无预装 Node、无全局 GMGN 依赖、未复制任何密钥或扫描历史。');

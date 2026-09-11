@@ -1,0 +1,24 @@
+{
+  "name": "meme-radar-open-source",
+  "version": "0.1.6",
+  "description": "Open-source edition of a local, read-only multi-chain meme token research radar",
+  "author": "DeFi狙击手 (@bi_9527zx)",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": "^22.23.0 || >=24.5.0"
+  },
+  "scripts": {
+    "start": "node --use-env-proxy src/main.mjs",
+    "setup": "node scripts/setup.mjs",
+    "open": "node scripts/open.mjs",
+    "doctor": "node scripts/setup.mjs --check",
+    "release:audit": "node scripts/release-audit.mjs",
+    "once": "node --use-env-proxy src/main.mjs --once",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "gmgn-cli": "1.5.7"
+  }
+}

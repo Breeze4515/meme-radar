@@ -1,0 +1,2520 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Meme雷达开源版</title>
+  <script>
+    if (location.protocol === 'file:') location.replace('http://127.0.0.1:3791/' + location.hash);
+  </script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #06090b;
+      --panel: #0d1519;
+      --panel-strong: #111e24;
+      --line: #27424c;
+      --line-soft: #1b3038;
+      --text: #eef8f5;
+      --muted: #9bb0aa;
+      --green: #43efaa;
+      --red: #ff6c7c;
+      --amber: #ffd064;
+      --cyan: #5ce5f2;
+      --blue: #77aaff;
+      --shadow: #0008;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 25% -10%, #15372d 0, transparent 32%),
+        linear-gradient(135deg, #05080a, #091014 58%, #050708);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(#48ddeb0b 1px, transparent 1px),
+        linear-gradient(90deg, #48ddeb0b 1px, transparent 1px);
+      background-size: 42px 42px;
+    }
+    .particle-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: .34;
+      z-index: 0;
+    }
+    .scan-line {
+      position: fixed;
+      left: 0;
+      right: 0;
+      top: -12vh;
+      height: 12vh;
+      pointer-events: none;
+      z-index: 0;
+      opacity: .16;
+      background: linear-gradient(to bottom, transparent, #48ddeb26 80%, #62f4ff99);
+      animation: scanSweep 9s linear infinite;
+    }
+    @keyframes scanSweep {
+      from { transform: translateY(-15vh); }
+      to { transform: translateY(125vh); }
+    }
+
+    button, input, select { font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
+    }
+
+    .shell {
+      width: min(1680px, calc(100% - 36px));
+      margin: auto;
+      padding: 24px 0 50px;
+      position: relative;
+      z-index: 1;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 18px;
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .mark {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--green);
+      color: var(--green);
+      font: 900 15px ui-monospace, monospace;
+      clip-path: polygon(14% 0, 86% 0, 100% 25%, 100% 75%, 86% 100%, 14% 100%, 0 75%, 0 25%);
+      box-shadow: 0 0 25px #36e79b33;
+    }
+    .brand h1 { margin: 0; font-size: 26px; letter-spacing: .035em; }
+    .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    .language-control {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 9px 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #091216cc;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .language-icon {
+      font-size: 18px;
+      line-height: 1;
+      filter: saturate(.85);
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .language-select {
+      min-height: 30px;
+      max-width: 150px;
+      border: 0;
+      border-left: 1px solid var(--line-soft);
+      background: #091216;
+      color: #f2faf8;
+      color-scheme: dark;
+      padding: 2px 5px 2px 9px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .language-select option {
+      background: #0b151a;
+      color: #f2faf8;
+    }
+    .language-select option:checked {
+      background: #17352d;
+      color: #ffffff;
+    }
+    .language-select:focus-visible {
+      outline: 1px solid #61cbd4;
+      outline-offset: 1px;
+      box-shadow: 0 0 0 2px #16353b;
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+      padding: 9px 13px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #091216cc;
+      font: 700 14px ui-monospace, monospace;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--amber);
+      box-shadow: 0 0 12px currentColor;
+      flex: 0 0 auto;
+    }
+    .dot.RUNNING { background: var(--green); }
+    .dot.SCANNING { background: var(--cyan); }
+    .dot.SWITCHING { background: var(--cyan); }
+    .dot.DEGRADED { background: var(--amber); }
+    .dot.ERROR, .dot.STATE_ERROR, .dot.OFFLINE { background: var(--red); }
+    .dot.RATE_LIMITED, .dot.GMGN_AUTH_REQUIRED { background: var(--amber); }
+    .dot.scanning { animation: statusPulse 1.1s ease-in-out infinite; }
+    @keyframes statusPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 8px currentColor; }
+      50% { transform: scale(1.45); box-shadow: 0 0 20px currentColor; }
+    }
+
+    .notice {
+      border: 1px solid #795f28;
+      background: #32271066;
+      color: #ffe1a0;
+      padding: 13px 16px;
+      border-radius: 11px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .notice.ok { border-color: #24664b; background: #12312666; color: #aaf5d1; }
+    .notice.bad { border-color: #71313b; background: #32151b66; color: #ffc0c8; }
+    .notice a { color: inherit; }
+
+    .chain-panel {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 15px;
+      margin-bottom: 15px;
+    }
+    .chain-title { min-width: 170px; }
+    .chain-title strong { display: block; font-size: 16px; }
+    .chain-title small { display: block; margin-top: 3px; color: var(--muted); font-size: 14px; }
+    .chain-actions { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    .chain-switcher { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .chain-button {
+      min-height: 38px;
+      padding: 7px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #091419;
+      color: #c4d3cf;
+      cursor: pointer;
+      font-size: 14px;
+      transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease;
+    }
+    .chain-button:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); transform: translateY(-1px); }
+    .chain-button.active { border-color: var(--green); background: #153328; color: var(--green); box-shadow: 0 0 16px #43efaa22; }
+    .chain-button:disabled { opacity: .38; cursor: not-allowed; }
+    .chain-button.switching { color: var(--amber); border-color: var(--amber); }
+    .api-key-form { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .api-key-label { color: var(--muted); font-size: 14px; white-space: nowrap; }
+    .api-key-input {
+      width: 176px;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #071014;
+      color: var(--text);
+      padding: 7px 10px;
+      font-size: 14px;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    .api-key-input::placeholder { color: #70847f; }
+    .api-key-button {
+      width: 38px;
+      min-height: 38px;
+      border: 1px solid #337766;
+      border-radius: 8px;
+      background: #123127;
+      color: var(--green);
+      cursor: pointer;
+      font-size: 17px;
+    }
+    .api-key-button:hover:not(:disabled) { border-color: var(--green); background: #183c30; }
+    .api-key-button:disabled, .api-key-input:disabled { cursor: wait; opacity: .55; }
+    .api-key-status { min-width: 90px; color: var(--muted); font-size: 14px; }
+    .api-key-status.good { color: var(--green); }
+    .api-key-status.bad { color: var(--red); }
+    .api-key-help {
+      min-height: 36px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #091419;
+      color: var(--cyan);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .onboarding-dialog { max-width: 720px; }
+    .onboarding-dialog h3 { margin: 0 0 8px; font-size: 21px; color: var(--text); }
+    .onboarding-dialog ol { margin: 14px 0; padding-inline-start: 24px; }
+    .onboarding-dialog li { margin: 8px 0; }
+    .public-key-box {
+      display: block;
+      width: 100%;
+      min-height: 116px;
+      resize: vertical;
+      margin: 12px 0;
+      padding: 12px;
+      border: 1px solid #365962;
+      border-radius: 8px;
+      background: #061015;
+      color: #cce9e4;
+      font: 13px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    .onboarding-security {
+      margin: 14px 0;
+      padding: 11px 13px;
+      border: 1px solid #735d2b;
+      border-radius: 8px;
+      background: #2b230f80;
+      color: #ffe1a0;
+    }
+    .onboarding-status { min-height: 24px; color: var(--muted); }
+    .onboarding-status.bad { color: var(--red); }
+    .gmgn-create-link[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 13px; }
+    .panel {
+      background: linear-gradient(145deg, #111e24ed, #0a1216f2);
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      box-shadow: 0 18px 50px var(--shadow);
+      overflow: hidden;
+    }
+    .wide { grid-column: span 12; }
+    .half { grid-column: span 6; }
+
+    .telemetry {
+      grid-column: span 12;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+    .telemetry-item {
+      min-height: 86px;
+      padding: 14px 16px;
+      border-right: 1px solid var(--line-soft);
+    }
+    .telemetry-item:last-child { border-right: 0; }
+    .telemetry-item label, .metric label {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .telemetry-item strong {
+      display: block;
+      font-size: 16px;
+      line-height: 1.35;
+    }
+    .telemetry-item small, .metric small {
+      display: block;
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 5px;
+    }
+
+    .metric { grid-column: span 2; padding: 16px; min-height: 116px; }
+    .metric strong { font: 800 29px ui-monospace, monospace; }
+    .metric .scope {
+      display: inline-block;
+      margin-left: 7px;
+      padding: 2px 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 14px;
+      vertical-align: 2px;
+    }
+    .outcome-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .outcome-item {
+      min-height: 82px;
+      padding: 13px 16px;
+      border-right: 1px solid var(--line-soft);
+    }
+    .outcome-item:last-child { border-right: 0; }
+    .outcome-item label { display: block; color: var(--muted); font-size: 14px; }
+    .outcome-item strong { display: block; margin-top: 5px; font: 800 18px ui-monospace, monospace; }
+    .outcome-item small { display: block; margin-top: 3px; color: var(--muted); font-size: 14px; }
+    .sample-gate {
+      padding: 10px 16px;
+      border-top: 1px solid var(--line-soft);
+      color: var(--amber);
+      background: #2b220d55;
+      font-size: 14px;
+    }
+
+    .head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .head h2 { font-size: 16px; letter-spacing: .05em; margin: 0; }
+    .head span { font-size: 14px; color: var(--muted); text-align: right; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(170px, auto) minmax(190px, auto);
+      gap: 10px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #081115aa;
+    }
+    .field {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #081216;
+      color: var(--text);
+      padding: 8px 11px;
+      font-size: 14px;
+    }
+    .field::placeholder { color: #789089; }
+    .result-summary {
+      padding: 10px 16px;
+      color: var(--muted);
+      font-size: 14px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .table {
+      overflow: auto;
+      max-height: min(68vh, 780px);
+      scrollbar-color: #385d68 #091216;
+    }
+    table { width: 100%; min-width: 1540px; border-collapse: separate; border-spacing: 0; }
+    th, td {
+      padding: 12px 13px;
+      border-bottom: 1px solid var(--line);
+      background: #0d181dcf;
+      font-size: 14px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      background: #12242b;
+      color: #b9ccc7;
+      letter-spacing: .035em;
+      white-space: nowrap;
+    }
+    th:first-child, td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      min-width: 205px;
+      box-shadow: 10px 0 18px #0005;
+    }
+    th:first-child { z-index: 5; }
+    tbody tr:hover td { background: #12252be8; }
+    tr.stale td { background: #211b12d6; }
+    tr.expired td { background: #28151ad6; }
+
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .good { color: var(--green); }
+    .bad { color: var(--red); }
+    .warn { color: var(--amber); }
+    .info { color: var(--cyan); }
+    .muted { color: var(--muted); }
+    .symbol { font: 800 16px ui-monospace, monospace; overflow-wrap: anywhere; }
+    .addr { color: var(--muted); font-size: 14px; margin-top: 5px; }
+    .audit-age { margin-top: 6px; font-size: 14px; }
+    .stack { display: grid; gap: 5px; }
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .pill.pass { color: var(--green); border-color: #287858; }
+    .pill.review { color: var(--amber); border-color: #7a612a; }
+    .pill.reject { color: var(--red); border-color: #71313b; }
+    .pill.ignore { color: var(--muted); border-color: #52616a; }
+    .pill.expired { color: #ff9cab; border-color: #71313b; }
+    .reasons { color: var(--muted); min-width: 270px; max-width: 360px; line-height: 1.55; }
+    .reason { margin-top: 5px; }
+    .reason:first-child { margin-top: 0; }
+    .empty { padding: 42px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+
+    .links, .review-actions {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .links a, .mini-button {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #2e5964;
+      border-radius: 6px;
+      background: #0b1c22;
+      color: var(--cyan);
+      padding: 5px 8px;
+      text-decoration: none;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .missing-link {
+      min-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      padding: 5px 8px;
+      border: 1px dashed #40545a;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .mini-button.pass { color: var(--green); border-color: #287858; }
+    .mini-button.ignore { color: #c4d0cd; border-color: #52616a; }
+    .mini-button.active { background: #17342a; box-shadow: inset 0 0 0 1px currentColor; }
+    .mini-button:disabled { cursor: not-allowed; opacity: .42; }
+
+    .events { padding: 8px 16px 14px; max-height: 390px; overflow: auto; }
+    .event { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+    .event time { color: var(--muted); font-family: ui-monospace, monospace; white-space: nowrap; }
+    .footer {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 15px;
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      line-height: 1.6;
+    }
+    .toast {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 20;
+      max-width: min(420px, calc(100% - 44px));
+      padding: 12px 15px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #12242bf2;
+      box-shadow: 0 14px 35px #0009;
+      color: var(--text);
+      font-size: 14px;
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+      transition: .18s ease;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    @media (max-width: 1220px) {
+      .telemetry { grid-template-columns: repeat(3, 1fr); }
+      .telemetry-item:nth-child(3) { border-right: 0; }
+      .telemetry-item:nth-child(-n+3) { border-bottom: 1px solid var(--line-soft); }
+      .metric { grid-column: span 4; }
+      .half { grid-column: span 12; }
+      .outcome-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 760px) {
+      .shell { width: calc(100% - 20px); padding-top: 14px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .header-actions { width: 100%; justify-content: flex-start; }
+      .language-control { flex: 1 1 210px; }
+      .language-select { max-width: none; flex: 1; }
+      .status { width: 100%; }
+      .telemetry { grid-template-columns: repeat(2, 1fr); }
+      .telemetry-item { border-bottom: 1px solid var(--line-soft); }
+      .telemetry-item:nth-child(odd) { border-right: 1px solid var(--line-soft); }
+      .telemetry-item:nth-child(even) { border-right: 0; }
+      .metric { grid-column: span 6; }
+      .outcome-grid { grid-template-columns: 1fr 1fr; }
+      .toolbar { grid-template-columns: 1fr; }
+      .criteria { grid-template-columns: 1fr; }
+      .footer { flex-direction: column; }
+      .head { align-items: flex-start; flex-direction: column; }
+      .head span { text-align: left; }
+      .chain-panel { align-items: flex-start; flex-direction: column; }
+      .chain-actions, .chain-switcher { justify-content: flex-start; }
+      .api-key-form { width: 100%; }
+      .api-key-input { flex: 1 1 160px; width: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+      .particle-canvas, .scan-line { display: none; }
+    }
+    html[dir="rtl"] body { direction: rtl; }
+    html[dir="rtl"] .language-select { border-left: 0; border-right: 1px solid var(--line-soft); }
+    html[dir="rtl"] th, html[dir="rtl"] td { text-align: right; }
+    html[dir="rtl"] th:first-child, html[dir="rtl"] td:first-child {
+      left: auto;
+      right: 0;
+      box-shadow: -10px 0 18px #0005;
+    }
+    html[dir="rtl"] .mono, html[dir="rtl"] .addr, html[dir="rtl"] [data-ltr] {
+      direction: ltr;
+      text-align: left;
+      unicode-bidi: isolate;
+    }
+    html[dir="rtl"] .metric strong, html[dir="rtl"] .outcome-item strong, html[dir="rtl"] time {
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    .manage-panel summary { padding: 16px; cursor: pointer; color: #cde2df; font-weight: 600; }
+    .live-panel { margin: 16px 0; border-color: #36515d; background: linear-gradient(120deg, #10202a, #0b151a); }
+    .live-heading, .live-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 16px 18px; }
+    .live-heading h2 { margin: 0; font-size: 20px; }
+    .live-heading small, .live-meta { color: #aebfc6; }
+    .live-toggle { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+    .live-toggle input { accent-color: #74bbc9; }
+    .live-toolbar { padding-top: 0; justify-content: flex-start; }
+    .live-toolbar input { flex: 1 1 220px; }
+    .live-toolbar select { max-width: 230px; }
+    .live-meta { padding: 0 18px 12px; font-size: 14px; }
+    .live-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0 18px 18px; max-height: 600px; overflow: auto; scrollbar-gutter: stable; }
+    .live-card { border: 1px solid #2d424c; border-radius: 10px; padding: 14px; background: #101b22; min-width: 0; }
+    .live-card.new-sighting { border-color: #668ba2; animation: liveArrival 1.1s ease-out; }
+    .live-card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .live-card-head strong { font-size: 20px; overflow-wrap: anywhere; }
+    .live-tag { color: #c7dff2; background: #233540; padding: 2px 7px; border-radius: 4px; font-size: 14px; }
+    .live-numbers { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+    .live-numbers small { display: block; color: #a6babf; }
+    .live-numbers b { font-size: 16px; }
+    .live-evidence { padding: 9px 0; border-top: 1px solid #29404a; color: #d9bd80; font-size: 14px; }
+    .live-card .addr { overflow-wrap: anywhere; }
+    .live-grid .empty { grid-column: 1 / -1; }
+    @keyframes liveArrival { from { background: #253c4a; } to { background: #101b22; } }
+    @media (max-width: 1000px) { .live-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 620px) { .live-grid { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { .live-card.new-sighting { animation: none; } }
+    .manage-body { padding: 12px 16px; border-top: 1px solid #244049; }
+    .manage-body:empty { display: none; }
+    .manage-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center; }
+    .manage-actions label { display: flex; gap: 6px; align-items: center; }
+    .manage-actions input { accent-color: #4ead91; }
+    .saved-row { padding: 10px 0; border-bottom: 1px solid #213a42; overflow-wrap: anywhere; }
+    dialog { color-scheme: dark; background: #101e24; color: #d7e5e3; border: 1px solid #45646a; border-radius: 12px; max-width: 520px; width: 90vw; }
+    dialog::backdrop { background: #0009; }
+    dialog textarea { display: block; width: 100%; min-height: 120px; margin: 16px 0; font: inherit; background: #081318; color: #e5f0ec; border: 1px solid #45646a; }
+  </style>
+</head>
+<body>
+  <canvas id="particleCanvas" class="particle-canvas" aria-hidden="true"></canvas>
+  <div class="scan-line" aria-hidden="true"></div>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="mark">雷达</div>
+        <h1 data-i18n="appTitle">Meme雷达开源版</h1>
+      </div>
+      <div class="header-actions">
+        <label class="language-control" for="languageSelect">
+          <span class="language-icon" aria-hidden="true">🌐</span>
+          <span class="visually-hidden" data-i18n="languageLabel">语言</span>
+          <select id="languageSelect" class="language-select" aria-label="选择语言" data-i18n-aria="languageAria">
+            <option value="zh-CN">简体中文</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="en">English</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="ar">العربية</option>
+          </select>
+        </label>
+        <div class="status" role="status" aria-live="polite">
+          <i id="dot" class="dot"></i>
+          <span id="fresh" data-i18n="waitingState">等待状态</span>
+          <strong id="status" data-i18n="preparing">准备中</strong>
+        </div>
+      </div>
+    </header>
+
+    <div id="notice" class="notice" role="status" aria-live="polite" data-i18n="loadingStatus">正在读取本地雷达状态……</div>
+
+    <section class="panel chain-panel" aria-label="扫描链路切换" data-i18n-aria="chainAria">
+      <div class="chain-title">
+        <strong data-i18n="chainTitle">扫描链路</strong>
+        <small id="chainHint" data-i18n="chainLoading">正在读取后端支持的链</small>
+      </div>
+      <div class="chain-actions">
+        <div id="chainSwitcher" class="chain-switcher"></div>
+        <form id="gmgnKeyForm" class="api-key-form">
+          <span class="api-key-label" data-i18n="gmgnApiLabel">GMGN API</span>
+          <input id="gmgnKeyInput" class="api-key-input" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" maxlength="256" data-ltr aria-describedby="gmgnKeyStatus" placeholder="输入 API Key" data-i18n-placeholder="gmgnApiPlaceholder">
+          <button id="gmgnKeyButton" class="api-key-button" type="submit" aria-label="确认并连接 GMGN API" data-i18n-aria="gmgnApiSubmitAria"><span aria-hidden="true">✓</span><span class="visually-hidden" data-i18n="gmgnApiSubmitText">确认</span></button>
+          <span id="gmgnKeyStatus" class="api-key-status" role="status" aria-live="polite" data-i18n="gmgnApiLocalOnly">仅发往本机</span>
+          <button id="gmgnOnboardingButton" class="api-key-help" type="button" data-i18n="gmgnApiGetKey">首次使用 / 创建 API</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="livePanel" class="panel live-panel" aria-labelledby="liveTitle">
+      <div class="live-heading">
+        <div><h2 id="liveTitle" data-i18n="liveTitle">即时发现 · 1分钟活跃榜</h2><small data-i18n="liveWarning">先发现，再核验。未完成深审，不代表安全或买入建议。</small></div>
+        <label class="live-toggle"><input id="liveAuto" type="checkbox" checked><span data-i18n="liveAuto">自动更新</span></label>
+      </div>
+      <div class="live-toolbar">
+        <input id="liveSearch" class="field" type="search" autocomplete="off" data-i18n-placeholder="searchPlaceholder" placeholder="搜索代币名称、简称或合约地址">
+        <select id="liveSort" class="field" data-i18n-aria="liveSort" aria-label="发现排序">
+          <option value="priority" data-i18n="livePriority">2–8万市值优先</option>
+          <option value="volume" data-i18n="liveVolumeSort">1分钟成交额优先</option>
+          <option value="new" data-i18n="liveNewSort">最近新进榜</option>
+        </select>
+        <span id="liveState" role="status" aria-live="polite" class="live-tag"></span>
+      </div>
+      <div id="liveMeta" class="live-meta"></div>
+      <div id="liveRows" class="live-grid"><div class="empty" data-i18n="preparing">准备中</div></div>
+    </section>
+
+    <section class="grid">
+      <article class="panel wide manage-panel">
+        <details id="manageDetails">
+          <summary data-i18n="manageTitle">⚙ 扫描设置与记录</summary>
+          <div class="manage-body">
+            <p data-i18n="scanSelectionHelp">选择1–3条链轮询，共享接口额度；切换上方标签只改变查看页面。</p>
+            <div id="scanSelection" class="manage-actions"></div>
+            <div class="manage-actions">
+              <button id="saveChains" class="mini-button" type="button" data-i18n="saveChains">保存扫描链</button>
+              <button id="notificationButton" class="mini-button" type="button" data-i18n="enableAlerts">开启桌面提醒</button>
+              <button id="exportButton" class="mini-button" type="button" data-i18n="exportRecords">导出记录</button>
+              <button id="disconnectButton" class="mini-button ignore" type="button" data-i18n="disconnectApi">清除并断开 API</button>
+            </div>
+            <p id="schedulerDetail" class="muted"></p>
+            <p data-i18n="alertLimit">桌面提醒需要本页保持打开并允许通知；静音后仍保留页面事件。</p>
+            <h3 data-i18n="savedNotes">收藏与备注</h3><div id="savedNotes"></div>
+          </div>
+        </details>
+        <div id="importantAlerts" class="manage-body" aria-live="polite"></div>
+      </article>
+      <article class="panel telemetry" aria-label="运行状态" data-i18n-aria="runtimeAria">
+        <div class="telemetry-item"><label data-i18n="localService">本地服务</label><strong id="serviceState" data-i18n="connecting">正在连接</strong><small id="serviceDetail" data-i18n="port3791">端口3791</small></div>
+        <div class="telemetry-item"><label data-i18n="gmgnSource">GMGN数据源</label><strong id="providerState" data-i18n="waitingState">等待状态</strong><small id="providerDetail" data-i18n="notRead">尚未读取</small></div>
+        <div class="telemetry-item"><label data-i18n="lastAttemptLabel">最近扫描尝试</label><strong id="lastAttempt">--</strong><small id="attemptAgo" data-i18n="noRecord">暂无记录</small></div>
+        <div class="telemetry-item"><label data-i18n="lastSuccessLabel">最近成功扫描</label><strong id="lastSuccess">--</strong><small id="successAgo" data-i18n="noRecord">暂无记录</small></div>
+        <div class="telemetry-item"><label data-i18n="nextScanLabel">下轮扫描</label><strong id="nextScan">--</strong><small id="scanProgress" data-i18n="waitingSchedule">等待调度</small></div>
+        <div class="telemetry-item"><label data-i18n="freshnessLabel">数据新鲜度</label><strong id="freshnessState" data-i18n="waitingData">等待数据</strong><small id="freshnessDetail" data-i18n="notJudged">尚未判断</small></div>
+      </article>
+
+      <article class="panel metric"><label><span data-i18n="scanRounds">扫描轮次</span> <span class="scope" data-i18n="cumulative">累计</span></label><strong id="scanCount">0</strong><small data-i18n="completedRounds">成功完成的历史轮次</small></article>
+      <article class="panel metric"><label><span data-i18n="discoveredTokens">发现代币</span> <span class="scope" data-i18n="currentRound">本轮</span></label><strong id="discovered">0</strong><small data-i18n="gmgnReturned">本轮GMGN返回数量</small></article>
+      <article class="panel metric"><label><span data-i18n="prequalifiedLabel">初筛通过</span> <span class="scope" data-i18n="currentRound">本轮</span></label><strong id="prequalified">0</strong><small id="prequalifiedDetail" data-i18n="awaitingAudit">等待或已进入深度审计</small></article>
+      <article class="panel metric"><label><span data-i18n="deepAuditLabel">深度审计</span> <span class="scope" data-i18n="last30m">近30分钟</span></label><strong id="audited">0</strong><small id="auditedDetail" data-i18n="auditSnapshots">当前保留的审计快照</small></article>
+      <article class="panel metric"><label><span data-i18n="chainCandidatesLabel">链上候选/待人工看X</span> <span class="scope" data-i18n="last30m">近30分钟</span></label><strong id="chainCandidates">0</strong><small id="chainCandidateDetail" data-i18n="notBuySignal">链上硬门通过，不代表应买入</small></article>
+      <article class="panel metric"><label><span data-i18n="manualPassedLabel">人工通过</span> <span class="scope" data-i18n="last30mLocal">近30分钟/本机</span></label><strong id="manualPassed">0</strong><small id="manualDetail" data-i18n="localOnlyNoTrade">仅本浏览器标记，不会下单</small></article>
+
+      <article class="panel wide">
+        <div class="head"><h2 data-i18n="outcomeTitle">筛选后表现验证</h2><span data-i18n="shadowDisclaimer">影子观察，不代表可成交收益，也不作为交易指令</span></div>
+        <div class="outcome-grid">
+          <div class="outcome-item"><label data-i18n="trackedSamples">跟踪样本</label><strong id="outcomeTracked">0</strong><small data-i18n="historicalObservations">历史候选观察数</small></div>
+          <div class="outcome-item"><label data-i18n="result30m">30分钟结果</label><strong id="outcome30m" data-i18n="none">暂无</strong><small id="outcome30mCount" data-i18n="completedZero">完成0个样本</small></div>
+          <div class="outcome-item"><label data-i18n="result1h">1小时结果</label><strong id="outcome1h" data-i18n="none">暂无</strong><small id="outcome1hCount" data-i18n="completedZero">完成0个样本</small></div>
+          <div class="outcome-item"><label data-i18n="result2h">2小时结果</label><strong id="outcome2h" data-i18n="none">暂无</strong><small id="outcome2hCount" data-i18n="completedZero">完成0个样本</small></div>
+          <div class="outcome-item"><label data-i18n="result24h">24小时结果</label><strong id="outcome24h" data-i18n="none">暂无</strong><small id="outcome24hCount" data-i18n="completedZero">完成0个样本</small></div>
+        </div>
+        <div id="outcomeGate" class="sample-gate" data-i18n="sampleGate">调参门槛：30分钟、2小时或24小时的完成样本均需满50个；未满50个只做观察，不用于调参。</div>
+        <div id="outcomeCoverage" class="manage-body muted"></div>
+      </article>
+
+      <article class="panel wide">
+        <div class="head">
+          <h2 data-i18n="auditTitle">近30分钟深度审计</h2>
+          <span data-i18n="auditSubtitle">市值2万–8万优先 · 创建至少5分钟 · 系统按GMGN额度分批深审</span>
+        </div>
+        <div class="toolbar" aria-label="候选筛选和排序" data-i18n-aria="toolbarAria">
+          <input id="searchInput" class="field" type="search" autocomplete="off" placeholder="搜索代币名称、简称或合约地址" data-i18n-placeholder="searchPlaceholder">
+          <select id="filterSelect" class="field" aria-label="筛选审计状态" data-i18n-aria="filterAria">
+            <option value="all" data-i18n="filterAll">全部审计记录</option>
+            <option value="chain" data-i18n="filterChain">仅链上候选</option>
+            <option value="waiting" data-i18n="filterWaiting">仅等待复查</option>
+            <option value="passed" data-i18n="filterPassed">仅人工通过</option>
+            <option value="ignored" data-i18n="filterIgnored">仅已忽略</option>
+            <option value="rejected" data-i18n="filterRejected">仅已排除</option>
+            <option value="fresh" data-i18n="filterFresh">仅5分钟内审计</option>
+            <option value="favorite" data-i18n="filterFavorite">仅收藏</option>
+          </select>
+          <select id="sortSelect" class="field" aria-label="排序方式" data-i18n-aria="sortAria">
+            <option value="audit_desc" data-i18n="sortAudit">按审计时间：最新优先</option>
+            <option value="score_desc" data-i18n="sortScore">按发现评分：高到低</option>
+            <option value="market_desc" data-i18n="sortMarketDesc">按市值：高到低</option>
+            <option value="market_asc" data-i18n="sortMarketAsc">按市值：低到高</option>
+            <option value="liquidity_desc" data-i18n="sortLiquidity">按流动性：高到低</option>
+          </select>
+        </div>
+        <div id="resultSummary" class="result-summary" data-i18n="waitingAuditData">等待审计数据</div>
+        <div id="candidates" aria-live="polite"><div class="empty" data-i18n="loadingAuditRecords">正在读取审计记录……</div></div>
+      </article>
+
+      <article class="panel wide">
+        <div class="head"><h2 data-i18n="eventsTitle">雷达事件</h2><span id="cycle" data-i18n="notScanned">尚未扫描</span></div>
+        <div id="events" class="events"><div class="empty" data-i18n="noEvents">暂无事件</div></div>
+      </article>
+    </section>
+
+    <div class="footer">
+      <span data-i18n="footerLocal">独立端口3791 · 只扫描、不交易 · 人工标记仅保存在当前浏览器。</span>
+    </div>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="noteDialog">
+    <h3 data-i18n="editNote">编辑备注</h3><p id="noteAddress" class="mono"></p>
+    <textarea id="noteInput" maxlength="500" aria-label="Note" data-i18n-aria="editNote"></textarea>
+    <div class="manage-actions"><button id="saveNote" class="mini-button" data-i18n="saveNote">保存备注</button><button id="cancelNote" class="mini-button" data-i18n="cancelAction">取消</button></div>
+  </dialog>
+  <dialog id="gmgnOnboardingDialog" class="onboarding-dialog">
+    <h3 data-i18n="gmgnOnboardingTitle">创建或更换 GMGN API</h3>
+    <p data-i18n="gmgnOnboardingIntro">每次创建新的 GMGN API Key，都必须重新完成 Agent 公钥绑定。Meme雷达只是在本机代为生成本次公钥，不会跳过这一步。</p>
+    <ol>
+      <li data-i18n="gmgnOnboardingStep1">复制下面的 Ed25519 公钥。</li>
+      <li data-i18n="gmgnOnboardingStep2">打开 GMGN 创建页面；如果没有自动填入，就粘贴公钥。</li>
+      <li data-i18n="gmgnOnboardingStep3">只开启“允许读取”，务必关闭“允许交易”。</li>
+      <li data-i18n="gmgnOnboardingStep4">创建后复制 API Key，回到 Meme 雷达粘贴并点击 ✓。</li>
+    </ol>
+    <textarea id="gmgnPublicKey" class="public-key-box" readonly spellcheck="false" aria-label="GMGN Public Key" data-i18n-aria="gmgnPublicKeyAria"></textarea>
+    <div class="manage-actions">
+      <button id="copyGmgnPublicKey" class="mini-button" type="button" disabled data-i18n="copyPublicKey">复制公钥</button>
+      <a id="openGmgnCreate" class="mini-button gmgn-create-link" href="https://gmgn.ai/ai/generateapi" target="_blank" rel="noopener noreferrer" aria-disabled="true" data-i18n="openGmgnCreate">打开 GMGN 创建页</a>
+      <button id="regenerateGmgnPublicKey" class="mini-button" type="button" data-i18n="regeneratePublicKey">重新生成本次公钥</button>
+    </div>
+    <p class="onboarding-security" data-i18n="gmgnOnboardingSecurity">私钥只保存在本机，不会显示在网页、日志或安装包中。不要把私钥文件发给任何人。</p>
+    <p id="gmgnOnboardingStatus" class="onboarding-status" role="status" aria-live="polite"></p>
+    <div class="manage-actions"><button id="closeGmgnOnboarding" class="mini-button" type="button" data-i18n="closeAction">关闭</button></div>
+  </dialog>
+
+  <script>
+    const byId = function (id) { return document.getElementById(id); };
+    const supportedLocales = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'ar'];
+    const messages = {
+      liveTitle: ['即时发现 · 1分钟活跃榜','即時發現 · 1分鐘活躍榜','Live discovery · 1-minute activity','即時発見 · 1分間の取引動向','즉시 발견 · 1분 활동','اكتشاف سريع · نشاط دقيقة'],
+      liveWarning: ['先发现，再核验。未完成深审，不代表安全或买入建议。','先發現，再核驗。未完成深審，不代表安全或買入建議。','Discover first, verify next. Not fully audited; neither safe nor a buy recommendation.','発見後に検証。詳細審査前であり、安全性や購入の推奨ではありません。','발견 후 검증. 심층 감사 전이며 안전 보장이나 매수 추천이 아닙니다.','اكتشاف ثم تحقق. لا يعني الأمان أو توصية بالشراء قبل التدقيق.'],
+      liveAuto: ['自动更新','自動更新','Auto-update','自動更新','자동 업데이트','تحديث تلقائي'],
+      liveSort: ['发现排序','發現排序','Discovery order','発見の並び順','발견 정렬','ترتيب الاكتشاف'],
+      livePriority: ['2–8万市值优先','2–8萬市值優先','$20–80K cap first','時価総額2～8万ドル優先','시총 2~8만 달러 우선','أولوية لقيمة 20–80 ألف دولار'],
+      liveVolumeSort: ['1分钟成交额优先','1分鐘成交額優先','1-minute volume first','1分出来高優先','1분 거래액 우선','حجم الدقيقة أولًا'],
+      liveNewSort: ['最近新进榜','最近新進榜','New to this feed','新規掲載順','최근 새 진입','المنضمون حديثًا'],
+      liveNew: ['新进榜','新進榜','New arrival','新規掲載','새 진입','جديد بالقائمة'],
+      liveReady: ['发现流已更新','發現流已更新','Feed updated','更新済み','목록 업데이트됨','تم تحديث القائمة'],
+      livePaused: ['已暂停自动更新','已暫停自動更新','Auto-update paused','自動更新停止中','자동 업데이트 중지','التحديث متوقف'],
+      livePolling: ['正在获取短周期榜单','正在取得短週期榜單','Fetching short-window ranking','短周期ランキング取得中','단기 순위 가져오는 중','جارٍ جلب ترتيب قصير المدى'],
+      liveStale: ['数据已旧，请等待更新','資料已舊，請等待更新','Stale data; wait for update','古いデータ・更新待ち','오래된 데이터; 업데이트 대기','بيانات قديمة؛ انتظر التحديث'],
+      liveMeta: ['{chain} · 目标每20秒轮询；实际更新：{time} · 显示{shown}/{total} · 限流与排队可能延后','{chain} · 目標每20秒輪詢；實際更新：{time} · 顯示{shown}/{total} · 限流與排隊可能延後','{chain} · Target: 20s polling; last update: {time} · {shown}/{total} shown · Limits/queue may delay updates','{chain} · 目標20秒間隔・更新: {time} · {shown}/{total}表示・制限や待ち行列で遅延あり','{chain} · 목표 20초 간격; 업데이트: {time} · {shown}/{total} 표시 · 제한/대기로 지연 가능','{chain} · الهدف كل 20 ثانية؛ آخر تحديث: {time} · عرض {shown}/{total} · قد تتأخر الطلبات'],
+      liveEmpty: ['本轮没有可展示的线索，或筛选后为空。不会用旧币或演示数据补位。','本輪沒有可展示的線索，或篩選後為空。不以舊幣或演示資料補位。','No matching leads in this snapshot. No stale or demo tokens are inserted.','該当候補なし。古いデータやデモで補完しません。','현재 일치하는 단서 없음. 오래된/데모 데이터를 채우지 않습니다.','لا نتائج مطابقة الآن؛ لا نملأ القائمة ببيانات قديمة أو تجريبية.'],
+      liveVolume: ['1分钟成交额','1分鐘成交額','1m volume','1分出来高','1분 거래액','حجم دقيقة'],
+      ageLabel: ['币龄','幣齡','Token age','トークン経過時間','토큰 나이','عمر الرمز'],
+      liveTrades: ['1分钟买 / 卖笔数','1分鐘買 / 賣筆數','1m buy / sell count','1分買い / 売り回数','1분 매수 / 매도 건수','عدد شراء / بيع بدقيقة'],
+      liveSmart: ['GMGN标记聪明钱 / 持有人','GMGN標記聰明錢 / 持有人','GMGN-tagged smart / holders','GMGN分類SM / 保有者','GMGN 표시 스마트 / 보유자','ذكي بتصنيف GMGN / حاملوه'],
+      liveDelta: ['两次快照涨跌（{seconds}秒）','兩次快照漲跌（{seconds}秒）','Snapshot price change ({seconds}s)','前回比（{seconds}秒）','스냅샷 가격 변화 ({seconds}초)','تغير السعر بين لقطتين ({seconds}ث)'],
+      liveUnreviewed: ['尚未深审；权限、LP与真人情况待核验','尚未深審；權限、LP與真人情況待核驗','Not audited: authorities, LP and organic activity unverified','詳細審査前：権限・LP・実活動は未検証','미감사: 권한, LP, 실제 활동 미검증','لم يُدقق: الصلاحيات وLP والنشاط الحقيقي غير متحقق'],
+      liveAudit: ['排队核验','排隊核驗','Queue audit','審査を予約','감사 대기 등록','طلب تدقيق'],
+      liveAuditQueued: ['已排队，按原安全门槛审核；不会下单','已排隊，按原安全門檻審核；不會下單','Queued under unchanged safety rules; no trading','同じ安全基準で審査待ち。取引しません','기존 안전 규칙으로 대기; 거래 없음','في الطابور وفق قواعد الأمان نفسها؛ بلا تداول'],
+      liveAuditScope: ['需先启用该链扫描，且通过原初筛；未知证据不算通过','須先啟用該鏈掃描並通過原初篩；未知證據不算通過','Enable scanning for this chain and pass the existing prefilter; unknown is not safe','対象チェーンのスキャン有効化と既存初期条件の通過が必要','해당 체인 스캔 활성화 및 기존 사전 필터 통과 필요','فعّل مسح الشبكة واجتز الفلتر الأولي؛ المجهول ليس آمنًا'],
+      liveAuditDenied: ['暂不能排队：证据已旧、超出原初筛范围或已被安全拒绝','暫不能排隊：證據已舊、超出原初篩範圍或已被安全拒絕','Cannot queue: stale, outside prefilter or safety-rejected','予約不可：古い証拠・対象外・安全上除外','대기 불가: 오래됨, 범위 밖 또는 안전 거부','تعذر الطلب: بيانات قديمة أو خارج الفلتر أو مرفوض أمنيًا'],
+      liveQueueFull: ['核验队列已满，请先等待已有请求完成','核驗佇列已滿，請先等待已有請求完成','Audit queue full; wait for pending requests','審査予約が満杯です。完了をお待ちください','감사 대기열 가득 참; 기존 요청 완료 대기','طابور التدقيق ممتلئ؛ انتظر انتهاء الطلبات'],
+      liveLimits: ['仅页面可见时更新；新进榜不是新发币；热度不是安全证明。','僅頁面可見時更新；新進榜不是新發幣；熱度不是安全證明。','Updates while visible. New arrival ≠ newly minted. Activity is not proof of safety.','表示中のみ更新。新規掲載≠新発行。活発さは安全の証明ではありません。','페이지 표시 중 업데이트. 새 진입 ≠ 신규 발행. 활동은 안전 증명이 아닙니다.','يُحدّث أثناء ظهور الصفحة. جديد بالقائمة لا يعني حديث الإصدار. النشاط لا يثبت الأمان.'],
+      manageTitle: ['⚙ 扫描设置与记录','⚙ 掃描設定與記錄','⚙ Scan settings & records','⚙ スキャン設定と記録','⚙ 스캔 설정 및 기록','⚙ إعدادات المسح والسجلات'],
+      skippedAfterReject: ['安全项已拒绝，后续检查已跳过','安全項已拒絕，後續檢查已略過','Safety rejection; further checks skipped','安全項目で除外。後続チェックは省略','안전 항목에서 제외; 후속 검사 생략','رُفض لأسباب أمنية؛ تم تخطي الفحوص اللاحقة'],
+      scanSelectionHelp: ['选择1–3条链轮询，共享接口额度；多链时上方标签只切换查看。','選擇1–3條鏈輪詢，共享額度；多鏈時上方標籤只切換檢視。','Poll 1–3 chains with a shared request budget; tabs change the view in multi-chain mode.','1～3チェーンを共通枠で巡回。複数チェーン時のタブは表示切替のみ。','공유 요청 한도로 1~3개 체인을 순환합니다. 다중 모드의 탭은 보기만 전환합니다.','استطلع 1–3 شبكات بميزانية طلبات مشتركة؛ التبويبات تغيّر العرض في الوضع المتعدد.'],
+      saveChains: ['保存扫描链','儲存掃描鏈','Save scan chains','対象を保存','스캔 체인 저장','حفظ الشبكات'],
+      enableAlerts: ['开启桌面提醒','開啟桌面提醒','Enable desktop alerts','通知を有効化','데스크톱 알림 켜기','تفعيل التنبيهات'],
+      muteAlerts: ['静音桌面提醒','靜音桌面提醒','Mute desktop alerts','通知をミュート','알림 끄기','كتم التنبيهات'],
+      alertLimit: ['桌面提醒需要本页保持打开并允许通知；静音后仍保留页面事件。','桌面提醒需保持本頁開啟並允許通知；靜音仍保留頁面事件。','Desktop alerts require this page to stay open and notification permission. Muting keeps the event history.','通知にはページを開いたままにし、通知権限が必要です。ミュート後も履歴は残ります。','알림은 페이지를 열어두고 권한을 허용해야 합니다. 음소거해도 기록은 유지됩니다.','تتطلب التنبيهات بقاء الصفحة مفتوحة وإذن الإشعارات. يبقى السجل عند الكتم.'],
+      exportRecords: ['导出记录','匯出記錄','Export records','記録を書き出す','기록 내보내기','تصدير السجلات'],
+      disconnectApi: ['清除并断开 API','清除並中斷 API','Clear & disconnect API','APIを削除・切断','API 삭제 및 연결 해제','مسح وفصل API'],
+      disconnectConfirm: ['清除本项目保存的 Key 并停止扫描？不会再回退使用旧 Key；全局 GMGN 配置不修改。','清除本專案 Key 並停止掃描？不再回退舊 Key；全域設定不修改。','Clear this project’s key and stop scanning? Legacy-key fallback will stay disabled. Global config is untouched.','このプロジェクトのキーを削除し停止しますか？旧キーに戻りません。全体設定は変更しません。','프로젝트 키를 삭제하고 중지할까요? 이전 키로 복귀하지 않으며 전역 설정은 유지합니다.','مسح مفتاح المشروع وإيقاف المسح؟ لن يُستخدم المفتاح القديم ولن يتغير الإعداد العام.'],
+      savedNotes: ['收藏与备注','收藏與備註','Favorites & notes','お気に入りとメモ','즐겨찾기 및 메모','المفضلة والملاحظات'],
+      favorite: ['收藏','收藏','Favorite','お気に入り','즐겨찾기','مفضلة'],
+      unfavorite: ['取消收藏','取消收藏','Unfavorite','お気に入り解除','즐겨찾기 해제','إلغاء المفضلة'],
+      filterFavorite: ['仅收藏','僅收藏','Favorites only','お気に入りのみ','즐겨찾기만','المفضلة فقط'],
+      editNote: ['编辑备注','編輯備註','Edit note','メモを編集','메모 편집','تعديل الملاحظة'],
+      saveNote: ['保存备注','儲存備註','Save note','メモを保存','메모 저장','حفظ الملاحظة'],
+      cancelAction: ['取消','取消','Cancel','キャンセル','취소','إلغاء'],
+      settingsSaved: ['设置已保存','設定已儲存','Settings saved','設定を保存しました','설정 저장됨','تم حفظ الإعدادات'],
+      settingsFailed: ['操作未完成，请重试','操作未完成，請重試','Action failed; retry','操作に失敗しました。再試行してください','실패했습니다. 다시 시도하세요','فشل الإجراء؛ أعد المحاولة'],
+      chainSelectionInvalid: ['请选择1–3条链','請選擇1–3條鏈','Select 1–3 chains','1～3チェーンを選択','1~3개 체인을 선택하세요','اختر 1–3 شبكات'],
+      schedulerSummary: ['轮询：{chains} · 正在处理：{current}','輪詢：{chains} · 正在處理：{current}','Polling: {chains} · Processing: {current}','巡回: {chains} · 処理中: {current}','순환: {chains} · 처리 중: {current}','الاستطلاع: {chains} · المعالجة: {current}'],
+      coverageDual: ['双源已接入','雙源已接入','Secondary sources wired','複数ソース接続済み','보조 데이터 연결됨','مصادر إضافية موصولة'],
+      coverageSingle: ['仅GMGN，需人工核验','僅GMGN，需人工核驗','GMGN only; manual verification','GMGNのみ・手動確認が必要','GMGN만 지원; 수동 검증 필요','GMGN فقط؛ يلزم التحقق اليدوي'],
+      coverageLine: ['{window}：到期{eligible} / 完成{completed} / 缺失{missing} · 中位涨跌{median}','{window}：到期{eligible} / 完成{completed} / 缺失{missing} · 中位漲跌{median}','{window}: due {eligible} / complete {completed} / missing {missing} · median {median}','{window}: 対象{eligible} / 完了{completed} / 欠損{missing} · 中央値{median}','{window}: 도래 {eligible} / 완료 {completed} / 누락 {missing} · 중앙값 {median}','{window}: مستحق {eligible} / مكتمل {completed} / مفقود {missing} · الوسيط {median}'],
+      rejectedCohort: ['拒绝组抽样对照','拒絕組抽樣對照','Sampled rejected cohort','除外群の抽出比較','제외 표본 비교','عينة المجموعة المرفوضة'],
+      newCandidateAlert: ['发现新候选，请人工复核','發現新候選，請人工複核','New candidate; review manually','新候補・手動確認が必要','새 후보 발견; 수동 확인 필요','مرشح جديد؛ راجعه يدويًا'],
+      riskAlert: ['风险或证据状态恶化，请重新复核','風險或證據狀態惡化，請重新複核','Risk or evidence worsened; review again','リスク・証拠状態が悪化。再確認してください','위험 또는 근거 상태 악화; 재검토 필요','تدهورت المخاطر أو الأدلة؛ راجع مجددًا'],
+      failureAlert: ['扫描长时间未成功，请检查连接','掃描長時間未成功，請檢查連線','No successful scan for an extended period; check connectivity','スキャン成功が長時間ありません。接続を確認してください','장시간 스캔 성공 없음; 연결 확인 필요','لم ينجح المسح منذ فترة؛ تحقق من الاتصال'],
+      notificationUnavailable: ['浏览器未允许通知，页面事件仍可查看','瀏覽器未允許通知，仍可查看頁面事件','Notifications unavailable; in-page events remain available','通知を利用できません。ページ内履歴は表示されます','알림을 사용할 수 없습니다. 페이지 기록은 유지됩니다','الإشعارات غير متاحة؛ تبقى أحداث الصفحة'],
+      appTitle: ['Meme雷达开源版', 'Meme雷達開源版', 'Meme Radar Open Source', 'Memeレーダー オープンソース版', 'Meme 레이더 오픈 소스판', 'رادار Meme مفتوح المصدر'],
+      languageLabel: ['语言', '語言', 'Language', '言語', '언어', 'اللغة'],
+      languageAria: ['选择语言', '選擇語言', 'Select language', '言語を選択', '언어 선택', 'اختيار اللغة'],
+      waitingState: ['等待状态', '等待狀態', 'Waiting', '待機中', '대기 중', 'في الانتظار'],
+      preparing: ['准备中', '準備中', 'Preparing', '準備中', '준비 중', 'جارٍ التجهيز'],
+      loadingStatus: ['正在读取本地雷达状态……', '正在讀取本地雷達狀態……', 'Reading local radar status…', 'ローカルレーダーの状態を読み込み中…', '로컬 레이더 상태 확인 중…', 'جارٍ قراءة حالة الرادار المحلي…'],
+      chainAria: ['扫描链路切换', '掃描鏈路切換', 'Scan chain switcher', 'スキャンチェーン切替', '스캔 체인 전환', 'مبدّل شبكة المسح'],
+      chainTitle: ['扫描链路', '掃描鏈路', 'Scan chain', 'スキャン対象', '스캔 체인', 'شبكة المسح'],
+      chainLoading: ['正在读取后端支持的链', '正在讀取後端支援的鏈', 'Reading supported chains', '対応チェーンを読み込み中', '지원 체인 확인 중', 'جارٍ قراءة الشبكات المدعومة'],
+      gmgnApiLabel: ['GMGN API', 'GMGN API', 'GMGN API', 'GMGN API', 'GMGN API', 'واجهة GMGN'],
+      gmgnApiPlaceholder: ['输入 API Key', '輸入 API Key', 'Enter API key', 'APIキーを入力', 'API 키 입력', 'أدخل مفتاح API'],
+      gmgnApiSubmitAria: ['确认并连接 GMGN API', '確認並連接 GMGN API', 'Confirm and connect GMGN API', 'GMGN APIを確認して接続', 'GMGN API 확인 및 연결', 'تأكيد وربط واجهة GMGN'],
+      gmgnApiSubmitText: ['确认', '確認', 'Confirm', '確認', '확인', 'تأكيد'],
+      gmgnApiLocalOnly: ['仅发往本机', '僅傳送至本機', 'Sent locally only', 'ローカル送信のみ', '로컬로만 전송', 'يُرسل محليًا فقط'],
+      gmgnApiRequired: ['请输入 API Key', '請輸入 API Key', 'Enter an API key', 'APIキーを入力してください', 'API 키를 입력하세요', 'أدخل مفتاح API'],
+      gmgnApiConnecting: ['正在连接……', '正在連接……', 'Connecting…', '接続中…', '연결 중…', 'جارٍ الاتصال…'],
+      gmgnApiConnected: ['已连接，正在安排扫描', '已連接，正在安排掃描', 'Verified; scan requested', '確認済み。スキャンを開始します', '검증 완료, 스캔 시작 요청됨', 'تم التحقق؛ تم طلب المسح'],
+      gmgnApiGetKey: ['首次使用 / 创建 API', '首次使用 / 建立 API', 'First use / Create API', '初回設定 / API作成', '첫 사용 / API 생성', 'الاستخدام الأول / إنشاء API'],
+      gmgnOnboardingTitle: ['创建或更换 GMGN API', '建立或更換 GMGN API', 'Create or replace a GMGN API', 'GMGN APIの作成・変更', 'GMGN API 생성 또는 교체', 'إنشاء أو استبدال واجهة GMGN'],
+      gmgnOnboardingIntro: ['每次创建新的 GMGN API Key，都必须重新完成 Agent 公钥绑定。Meme雷达只是在本机代为生成本次公钥，不会跳过这一步。', '每次建立新的 GMGN API Key，都必須重新完成 Agent 公鑰綁定。Meme雷達只是在本機代為產生本次公鑰，不會略過此步驟。', 'Every new GMGN API key requires a fresh agent public-key pairing. Meme Radar only generates that public key locally; it never skips the pairing step.', 'GMGN APIキーを新しく作成するたびに、Agent公開鍵の再連携が必要です。Meme Radarは今回の公開鍵を端末内で生成するだけで、この手順を省略しません。', '새 GMGN API 키를 만들 때마다 Agent 공개 키를 다시 연결해야 합니다. Meme 레이더는 이번 공개 키를 로컬에서 생성할 뿐이며 이 단계를 건너뛰지 않습니다.', 'يتطلب كل مفتاح GMGN API جديد ربطًا جديدًا بالمفتاح العام للوكيل. لا يتجاوز الرادار هذه الخطوة، بل ينشئ المفتاح العام لهذه المرة محليًا فقط.'],
+      gmgnOnboardingStep1: ['复制下面的 Ed25519 公钥。', '複製下方的 Ed25519 公鑰。', 'Copy the Ed25519 public key below.', '下のEd25519公開鍵をコピーします。', '아래 Ed25519 공개 키를 복사하세요.', 'انسخ مفتاح Ed25519 العام أدناه.'],
+      gmgnOnboardingStep2: ['打开 GMGN 创建页面；如果没有自动填入，就粘贴公钥。', '開啟 GMGN 建立頁面；若未自動填入，請貼上公鑰。', 'Open the GMGN creation page; paste the public key if it is not prefilled.', 'GMGN作成ページを開き、自動入力されない場合は公開鍵を貼り付けます。', 'GMGN 생성 페이지를 열고 자동 입력되지 않으면 공개 키를 붙여 넣으세요.', 'افتح صفحة إنشاء GMGN والصق المفتاح العام إن لم يُملأ تلقائيًا.'],
+      gmgnOnboardingStep3: ['只开启“允许读取”，务必关闭“允许交易”。', '只開啟「允許讀取」，務必關閉「允許交易」。', 'Enable Read only and keep Trading disabled.', '「読取許可」のみ有効にし、「取引許可」は必ず無効にします。', '읽기만 켜고 거래는 반드시 끄세요.', 'فعّل القراءة فقط واترك التداول معطلاً.'],
+      gmgnOnboardingStep4: ['创建后复制 API Key，回到 Meme雷达粘贴并点击 ✓。', '建立後複製 API Key，回到 Meme雷達貼上並點擊 ✓。', 'Copy the API key, return to Meme Radar, paste it, and click ✓.', '作成後にAPIキーをコピーし、レーダーへ戻って貼り付け、✓を押します。', '생성된 API 키를 복사해 레이더에 붙여 넣고 ✓를 누르세요.', 'انسخ مفتاح API ثم عد إلى الرادار والصقه واضغط ✓.'],
+      gmgnOnboardingSecurity: ['私钥只保存在本机，不会显示在网页、日志或安装包中。不要把私钥文件发给任何人。', '私鑰只保存在本機，不會顯示於網頁、日誌或安裝包。不要把私鑰檔案交給任何人。', 'The private key stays on this computer and is never shown in the page, logs, or installer. Never share it.', '秘密鍵はこのPC内だけに保存され、画面・ログ・配布物には表示されません。共有しないでください。', '개인 키는 이 컴퓨터에만 저장되며 화면, 로그, 설치 파일에 표시되지 않습니다. 절대 공유하지 마세요.', 'يبقى المفتاح الخاص على هذا الجهاز ولا يظهر في الصفحة أو السجلات أو المثبّت. لا تشاركه.'],
+      gmgnPublicKeyAria: ['GMGN 公钥', 'GMGN 公鑰', 'GMGN public key', 'GMGN公開鍵', 'GMGN 공개 키', 'مفتاح GMGN العام'],
+      copyPublicKey: ['复制公钥', '複製公鑰', 'Copy public key', '公開鍵をコピー', '공개 키 복사', 'نسخ المفتاح العام'],
+      publicKeyCopied: ['公钥已复制', '公鑰已複製', 'Public key copied', '公開鍵をコピーしました', '공개 키 복사됨', 'تم نسخ المفتاح العام'],
+      openGmgnCreate: ['打开 GMGN 创建页', '開啟 GMGN 建立頁', 'Open GMGN creation page', 'GMGN作成ページを開く', 'GMGN 생성 페이지 열기', 'فتح صفحة إنشاء GMGN'],
+      gmgnOnboardingPreparing: ['正在本机生成安全密钥……', '正在本機產生安全密鑰……', 'Creating a secure local key…', 'ローカル鍵を生成中…', '로컬 보안 키 생성 중…', 'جارٍ إنشاء مفتاح محلي آمن…'],
+      gmgnOnboardingReady: ['公钥已准备好，请按上面四步操作。', '公鑰已準備好，請按上方四步操作。', 'The public key is ready. Follow the four steps above.', '公開鍵の準備が完了しました。上の4手順を進めてください。', '공개 키 준비 완료. 위 네 단계를 진행하세요.', 'المفتاح العام جاهز؛ اتبع الخطوات الأربع أعلاه.'],
+      gmgnOnboardingFailed: ['无法生成本机密钥，请重新启动 Meme雷达后再试。', '無法產生本機密鑰，請重新啟動 Meme雷達後再試。', 'Could not create the local key. Restart Meme Radar and try again.', 'ローカル鍵を生成できません。再起動してお試しください。', '로컬 키 생성 실패. Meme 레이더를 다시 시작하세요.', 'تعذر إنشاء المفتاح المحلي؛ أعد تشغيل الرادار وحاول مجددًا.'],
+      regeneratePublicKey: ['重新生成本次公钥', '重新產生本次公鑰', 'Generate a new public key', '新しい公開鍵を生成', '새 공개 키 생성', 'إنشاء مفتاح عام جديد'],
+      regeneratePublicKeyConfirm: ['旧的待绑定公钥将失效。确认重新生成吗？', '舊的待綁定公鑰將失效。確定重新產生嗎？', 'The previous pending public key will stop working. Generate a new one?', '以前の未連携公開鍵は無効になります。再生成しますか？', '이전 대기 공개 키는 사용할 수 없게 됩니다. 새로 생성할까요?', 'سيتوقف المفتاح العام السابق قيد الربط عن العمل. هل تريد إنشاء مفتاح جديد؟'],
+      closeAction: ['关闭', '關閉', 'Close', '閉じる', '닫기', 'إغلاق'],
+      gmgnApiConfigured: ['已配置，可更换 Key', '已設定，可更換 Key', 'Configured; you can replace the key', '設定済み。キーを変更できます', '설정됨; 키 변경 가능', 'تم الإعداد؛ يمكنك تغيير المفتاح'],
+      gmgnApiVerified: ['已连接', '已連接', 'Connected', '接続済み', '연결됨', 'متصل'],
+      gmgnApiInvalid: ['Key 无效或已失效，请检查后重试', 'Key 無效或已失效，請檢查後重試', 'Invalid or expired key; check and retry', 'キーが無効または期限切れです', '키가 잘못되었거나 만료되었습니다', 'المفتاح غير صالح أو منتهي الصلاحية'],
+      gmgnApiPermission: ['该 Key 没有此链数据的读取权限', '此 Key 沒有此鏈資料的讀取權限', 'This key cannot read data for this chain', 'このキーには対象チェーンの読取権限がありません', '이 키에는 해당 체인의 읽기 권한이 없습니다', 'لا يملك المفتاح إذن قراءة بيانات هذه الشبكة'],
+      gmgnApiRate: ['GMGN 暂时限流，请稍后重试', 'GMGN 暫時限流，請稍後重試', 'GMGN rate limit reached; retry later', 'GMGNの制限中です。しばらくして再試行してください', 'GMGN 요청 제한, 나중에 다시 시도하세요', 'تم بلوغ حد طلبات GMGN؛ أعد المحاولة لاحقًا'],
+      gmgnApiRateCountdown: ['GMGN 已限流，请勿重复点击；约 {seconds} 秒后再试', 'GMGN 已限流，請勿重複點擊；約 {seconds} 秒後再試', 'GMGN is rate-limited. Do not retry repeatedly; try again in about {seconds}s.', 'GMGNの制限中です。連続操作せず、約{seconds}秒後に再試行してください。', 'GMGN 요청 제한 중입니다. 반복 클릭하지 말고 약 {seconds}초 후 다시 시도하세요.', 'تم تقييد GMGN. لا تكرر المحاولة؛ حاول مجددًا بعد نحو {seconds} ثانية.'],
+      gmgnApiNetwork: ['无法连接 GMGN；Windows 请开启系统代理/VPN，完全退出雷达后重新打开', '無法連接 GMGN；Windows 請開啟系統代理/VPN，完全退出雷達後重新開啟', 'Cannot reach GMGN. On Windows, enable the system proxy/VPN, fully exit Radar, then reopen it.', 'GMGNに接続できません。Windowsではシステムプロキシ/VPNを有効にし、Radarを終了して再起動してください。', 'GMGN에 연결할 수 없습니다. Windows 시스템 프록시/VPN을 켠 뒤 레이더를 완전히 종료하고 다시 여세요.', 'تعذر الاتصال بـ GMGN. في Windows فعّل وكيل النظام أو VPN، ثم أغلق الرادار بالكامل وأعد فتحه.'],
+      gmgnApiInstall: ['请先运行“安装并启动”入口', '請先執行「安裝並啟動」入口', 'Run the installer and launcher first', '先にインストーラーを実行してください', '설치 및 실행 파일을 먼저 실행하세요', 'شغّل المثبّت أولًا'],
+      gmgnApiFailed: ['连接失败，请检查密钥后重试', '連接失敗，請檢查密鑰後重試', 'Connection failed; check the key and retry', '接続失敗。キーを確認して再試行してください', '연결 실패; 키를 확인하고 다시 시도하세요', 'فشل الاتصال؛ تحقق من المفتاح وحاول مجددًا'],
+      gmgnApiMismatch: ['API Key与本机公钥不匹配，请用本窗口的公钥重新创建', 'API Key與本機公鑰不相符，請用本視窗的公鑰重新建立', 'The API key does not match this computer\'s public key. Create it again using this window.', 'APIキーとこのPCの公開鍵が一致しません。この画面の公開鍵で作り直してください。', 'API 키가 이 컴퓨터의 공개 키와 일치하지 않습니다. 이 창의 공개 키로 다시 생성하세요.', 'لا يتطابق مفتاح API مع المفتاح العام لهذا الجهاز؛ أنشئه مجددًا بالمفتاح الظاهر هنا.'],
+      runtimeAria: ['运行状态', '運行狀態', 'Runtime status', '稼働状態', '운영 상태', 'حالة التشغيل'],
+      localService: ['本地服务', '本地服務', 'Local service', 'ローカルサービス', '로컬 서비스', 'الخدمة المحلية'],
+      connecting: ['正在连接', '正在連線', 'Connecting', '接続中', '연결 중', 'جارٍ الاتصال'],
+      port3791: ['端口3791', '連接埠3791', 'Port 3791', 'ポート3791', '포트 3791', 'المنفذ 3791'],
+      gmgnSource: ['GMGN数据源', 'GMGN資料源', 'GMGN source', 'GMGNデータソース', 'GMGN 데이터 소스', 'مصدر بيانات GMGN'],
+      notRead: ['尚未读取', '尚未讀取', 'Not read yet', '未取得', '아직 읽지 않음', 'لم تُقرأ بعد'],
+      lastAttemptLabel: ['最近扫描尝试', '最近掃描嘗試', 'Last scan attempt', '最終スキャン試行', '최근 스캔 시도', 'آخر محاولة مسح'],
+      noRecord: ['暂无记录', '暫無記錄', 'No record', '記録なし', '기록 없음', 'لا يوجد سجل'],
+      lastSuccessLabel: ['最近成功扫描', '最近成功掃描', 'Last successful scan', '最終成功スキャン', '최근 성공 스캔', 'آخر مسح ناجح'],
+      nextScanLabel: ['下轮扫描', '下輪掃描', 'Next scan', '次回スキャン', '다음 스캔', 'المسح التالي'],
+      waitingSchedule: ['等待调度', '等待排程', 'Waiting for schedule', '実行待ち', '스케줄 대기', 'بانتظار الجدولة'],
+      freshnessLabel: ['数据新鲜度', '資料新鮮度', 'Data freshness', 'データ鮮度', '데이터 최신성', 'حداثة البيانات'],
+      waitingData: ['等待数据', '等待資料', 'Waiting for data', 'データ待ち', '데이터 대기', 'بانتظار البيانات'],
+      notJudged: ['尚未判断', '尚未判斷', 'Not evaluated', '未判定', '미판정', 'لم يُقيّم بعد'],
+      scanRounds: ['扫描轮次', '掃描輪次', 'Scan cycles', 'スキャン回数', '스캔 횟수', 'دورات المسح'],
+      cumulative: ['累计', '累計', 'Total', '累計', '누적', 'إجمالي'],
+      completedRounds: ['成功完成的历史轮次', '歷史成功完成輪次', 'Historically completed cycles', '過去の完了サイクル', '성공적으로 완료된 역사적 주기', 'الدورات المكتملة تاريخيًا'],
+      discoveredTokens: ['发现代币', '發現代幣', 'Tokens found', '検出トークン', '발견 토큰', 'الرموز المكتشفة'],
+      currentRound: ['本轮', '本輪', 'This cycle', '今回', '현재 주기', 'هذه الدورة'],
+      gmgnReturned: ['本轮GMGN返回数量', '本輪GMGN回傳數量', 'Returned by GMGN this cycle', '今回のGMGN取得数', '이번 주기 GMGN 반환 수', 'ما أعاده GMGN في هذه الدورة'],
+      prequalifiedLabel: ['初筛通过', '初篩通過', 'Pre-screened', '一次審査通過', '1차 필터 통과', 'اجتازت الفحص الأولي'],
+      awaitingAudit: ['等待或已进入深度审计', '等待或已進入深度審計', 'Waiting for or in deep audit', '深度審査待ちまたは実行中', '심층 감사 대기 또는 진행 중', 'بانتظار التدقيق العميق أو قيده'],
+      deepAuditLabel: ['深度审计', '深度審計', 'Deep audits', '深度審査', '심층 감사', 'تدقيق عميق'],
+      last30m: ['近30分钟', '近30分鐘', 'Last 30 min', '過去30分', '최근 30분', 'آخر 30 دقيقة'],
+      auditSnapshots: ['当前保留的审计快照', '目前保留的審計快照', 'Retained audit snapshots', '保持中の審査スナップショット', '보관 중인 감사 스냅샷', 'لقطات التدقيق المحتفظ بها'],
+      chainCandidatesLabel: ['链上候选/待人工看X', '鏈上候選/待人工看X', 'On-chain / review X', 'オンチェーン候補/X要確認', '온체인 후보/X 수동 확인', 'مرشح على السلسلة / مراجعة X'],
+      notBuySignal: ['链上硬门通过，不代表应买入', '通過鏈上硬門檻，不代表應買入', 'Passing checks is not a buy signal', '通過は買いシグナルではありません', '검사 통과는 매수 신호가 아닙니다', 'اجتياز الفحص ليس إشارة شراء'],
+      manualPassedLabel: ['人工通过', '人工通過', 'Manually approved', '手動承認', '수동 승인', 'موافقة يدوية'],
+      last30mLocal: ['近30分钟/本机', '近30分鐘/本機', '30 min / local', '30分/ローカル', '30분/로컬', '30 دقيقة / محلي'],
+      localOnlyNoTrade: ['仅本浏览器标记，不会下单', '僅本瀏覽器標記，不會下單', 'Browser-only mark; no order', 'このブラウザのみ・注文なし', '현재 브라우저에만 저장·주문 없음', 'علامة في هذا المتصفح فقط؛ لا أوامر'],
+      outcomeTitle: ['筛选后表现验证', '篩選後表現驗證', 'Post-screen performance', '選別後パフォーマンス', '필터링 후 성과 검증', 'أداء ما بعد الفرز'],
+      shadowDisclaimer: ['影子观察，不代表可成交收益，也不作为交易指令', '影子觀察，不代表可成交收益，也不作為交易指令', 'Shadow tracking only; not executable return or a trade instruction', '影子追跡のみ。約定可能な収益や取引指示ではありません', '영자 관찰용이며 실제 수익·거래 지시가 아닙니다', 'تتبع ظلي فقط؛ لا يمثل عائدًا قابلًا للتنفيذ أو أمر تداول'],
+      trackedSamples: ['跟踪样本', '追蹤樣本', 'Tracked samples', '追跡サンプル', '추적 표본', 'العينات المتتبعة'],
+      historicalObservations: ['历史候选观察数', '歷史候選觀察數', 'Historical candidate observations', '過去の候補観測数', '역사적 후보 관찰 수', 'عدد مراقبات المرشحين'],
+      result30m: ['30分钟结果', '30分鐘結果', '30 min result', '30分結果', '30분 결과', 'نتيجة 30 دقيقة'],
+      result1h: ['1小时结果', '1小時結果', '1 hr result', '1時間結果', '1시간 결과', 'نتيجة ساعة'],
+      result2h: ['2小时结果', '2小時結果', '2 hr result', '2時間結果', '2시간 결과', 'نتيجة ساعتين'],
+      result24h: ['24小时结果', '24小時結果', '24 hr result', '24時間結果', '24시간 결과', 'نتيجة 24 ساعة'],
+      none: ['暂无', '暫無', 'None', 'なし', '없음', 'لا يوجد'],
+      completedZero: ['完成0个样本', '完成0個樣本', '0 samples complete', '0件完了', '0개 표본 완료', '0 عينة مكتملة'],
+      sampleGate: ['调参门槛：30分钟、2小时或24小时的完成样本均需满50个；未满50个只做观察，不用于调参。', '調參門檻：30分鐘、2小時或24小時的完成樣本均需滿50個；未滿50個只做觀察，不用於調參。', 'Tuning gate: each 30m, 2h or 24h window needs 50 completed samples; smaller sets are observation-only.', '調整基準：30分・2時間・24時間の各窓で50件完了が必要です。未満は観測のみです。', '튜닝 기준: 30분·2시간·24시간 각 구간에 50개 완료 표본이 필요합니다. 미달은 관찰용입니다.', 'بوابة الضبط: يلزم 50 عينة مكتملة لكل نافذة 30د أو 2س أو 24س؛ ما دون ذلك للمراقبة فقط.'],
+      auditTitle: ['近30分钟深度审计', '近30分鐘深度審計', 'Deep audits: last 30 min', '過去30分の深度審査', '최근 30분 심층 감사', 'التدقيق العميق لآخر 30 دقيقة'],
+      auditSubtitle: ['按链上安全、持仓结构与市场数据分批深审', '按鏈上安全、持倉結構與市場資料分批深審', 'Batched review of on-chain safety, holders and market data', 'オンチェーン安全性・保有構造・市場データを分割審査', '온체인 안전성·보유 구조·시장 데이터를 분할 심사', 'تدقيق دفعي لأمان السلسلة وهيكل الحيازة وبيانات السوق'],
+      toolbarAria: ['候选筛选和排序', '候選篩選和排序', 'Candidate filters and sorting', '候補の絞り込みと並べ替え', '후보 필터 및 정렬', 'تصفية المرشحين وترتيبهم'],
+      searchPlaceholder: ['搜索代币名称、简称或合约地址', '搜尋代幣名稱、簡稱或合約地址', 'Search name, symbol or contract', '名称・シンボル・コントラクトを検索', '이름, 심볼 또는 계약 주소 검색', 'البحث بالاسم أو الرمز أو العقد'],
+      filterAria: ['筛选审计状态', '篩選審計狀態', 'Filter audit status', '審査状態を絞る', '감사 상태 필터', 'تصفية حالة التدقيق'],
+      filterAll: ['全部审计记录', '全部審計記錄', 'All audit records', 'すべての審査', '전체 감사 기록', 'كل سجلات التدقيق'],
+      filterChain: ['仅链上候选', '僅鏈上候選', 'On-chain candidates', 'オンチェーン候補のみ', '온체인 후보만', 'مرشحو السلسلة فقط'],
+      filterWaiting: ['仅等待复查', '僅等待複查', 'Waiting for recheck', '再確認待ちのみ', '재검토 대기만', 'بانتظار إعادة الفحص'],
+      filterPassed: ['仅人工通过', '僅人工通過', 'Manually approved', '手動承認のみ', '수동 승인만', 'موافقة يدوية فقط'],
+      filterIgnored: ['仅已忽略', '僅已忽略', 'Ignored', '無視済み', '무시됨', 'المتجاهلة'],
+      filterRejected: ['仅已排除', '僅已排除', 'Rejected', '除外済み', '제외됨', 'المرفوضة'],
+      filterFresh: ['仅5分钟内审计', '僅5分鐘內審計', 'Audited within 5 min', '5分以内の審査', '5분 이내 감사', 'مدققة خلال 5 دقائق'],
+      sortAria: ['排序方式', '排序方式', 'Sort order', '並べ替え', '정렬 방식', 'طريقة الترتيب'],
+      sortAudit: ['按审计时间：最新优先', '按審計時間：最新優先', 'Audit time: newest', '審査時刻：新しい順', '감사 시간: 최신순', 'وقت التدقيق: الأحدث'],
+      sortScore: ['按发现评分：高到低', '按發現評分：高到低', 'Discovery score: high to low', '発見スコア：高い順', '발견 점수: 높은순', 'نتيجة الاكتشاف: تنازلي'],
+      sortMarketDesc: ['按市值：高到低', '按市值：高到低', 'Market cap: high to low', '時価総額：高い順', '시가총액: 높은순', 'القيمة السوقية: تنازلي'],
+      sortMarketAsc: ['按市值：低到高', '按市值：低到高', 'Market cap: low to high', '時価総額：低い順', '시가총액: 낮은순', 'القيمة السوقية: تصاعدي'],
+      sortLiquidity: ['按流动性：高到低', '按流動性：高到低', 'Liquidity: high to low', '流動性：高い順', '유동성: 높은순', 'السيولة: تنازلي'],
+      waitingAuditData: ['等待审计数据', '等待審計資料', 'Waiting for audit data', '審査データ待ち', '감사 데이터 대기', 'بانتظار بيانات التدقيق'],
+      loadingAuditRecords: ['正在读取审计记录……', '正在讀取審計記錄……', 'Loading audit records…', '審査記録を読み込み中…', '감사 기록 로드 중…', 'جارٍ تحميل سجلات التدقيق…'],
+      eventsTitle: ['雷达事件', '雷達事件', 'Radar events', 'レーダーイベント', '레이더 이벤트', 'أحداث الرادار'],
+      notScanned: ['尚未扫描', '尚未掃描', 'Not scanned yet', '未スキャン', '아직 스캔하지 않음', 'لم يتم المسح بعد'],
+      noEvents: ['暂无事件', '暫無事件', 'No events', 'イベントなし', '이벤트 없음', 'لا أحداث'],
+      footerLocal: ['独立端口3791 · 只扫描、不交易 · 人工标记仅保存在当前浏览器。', '獨立連接埠3791 · 只掃描、不交易 · 人工標記僅保存在目前瀏覽器。', 'Dedicated port 3791 · scan only, never trade · manual marks stay in this browser.', '専用ポート3791・スキャンのみ・取引なし・手動マークはこのブラウザ内だけ。', '전용 포트 3791 · 스캔 전용, 거래 없음 · 수동 표시는 현재 브라우저에만 저장.', 'المنفذ المستقل 3791 · مسح فقط بلا تداول · العلامات اليدوية في هذا المتصفح فقط.'],
+      unknown: ['未知', '未知', 'Unknown', '不明', '알 수 없음', 'غير معروف'],
+      unavailable: ['不可用', '不可用', 'Unavailable', '利用不可', '사용 불가', 'غير متاح'],
+      online: ['在线', '線上', 'Online', 'オンライン', '온라인', 'متصل'],
+      offline: ['离线', '離線', 'Offline', 'オフライン', '오프라인', 'غير متصل'],
+      statusRunning: ['正常扫描', '正常掃描', 'Running', 'スキャン中', '정상 스캔', 'يعمل'],
+      statusScanning: ['正在扫描', '正在掃描', 'Scanning', 'スキャン中', '스캔 중', 'جارٍ المسح'],
+      statusSwitching: ['切换链路', '切換鏈路', 'Switching chain', 'チェーン切替中', '체인 전환 중', 'جارٍ تبديل الشبكة'],
+      statusDegraded: ['部分数据', '部分資料', 'Partial data', '一部データ', '일부 데이터', 'بيانات جزئية'],
+      statusRateLimited: ['限频等待', '限頻等待', 'Rate-limit wait', 'レート制限待ち', '속도 제한 대기', 'انتظار حد المعدل'],
+      statusError: ['扫描异常', '掃描異常', 'Scan error', 'スキャン異常', '스캔 오류', 'خطأ في المسح'],
+      statusAuth: ['等待授权', '等待授權', 'Authorization needed', '認証待ち', '인증 필요', 'يلزم التفويض'],
+      statusStateError: ['状态异常', '狀態異常', 'State error', '状態異常', '상태 오류', 'خطأ في الحالة'],
+      statusUnknown: ['状态未知', '狀態未知', 'Unknown status', '状態不明', '상태 알 수 없음', 'حالة غير معروفة'],
+      rateLimitedSafe: ['GMGN请求频率受限，系统正在等待下一轮自动重试', 'GMGN請求頻率受限，系統正等待下一輪自動重試', 'GMGN rate limit reached; waiting for the next automatic retry', 'GMGNのレート制限中。次回の自動再試行を待機しています', 'GMGN 속도 제한으로 다음 자동 재시도를 기다립니다', 'تم بلوغ حد GMGN؛ بانتظار إعادة المحاولة تلقائيًا'],
+      requestFailedSafe: ['数据请求暂时失败，系统将在下一轮自动重试', '資料請求暫時失敗，系統將於下一輪自動重試', 'Data request failed temporarily; the next cycle will retry', 'データ取得に一時失敗。次回に自動再試行します', '데이터 요청이 일시 실패했으며 다음 주기에 재시도합니다', 'فشل طلب البيانات مؤقتًا؛ ستتم إعادة المحاولة في الدورة التالية'],
+      sourceChanged: ['数据请求状态发生变化', '資料請求狀態發生變化', 'Data request status changed', 'データ取得状態が変化しました', '데이터 요청 상태가 변경되었습니다', 'تغيرت حالة طلب البيانات'],
+      durationSeconds: ['{n}秒', '{n}秒', '{n}s', '{n}秒', '{n}초', '{n}ث'],
+      durationMinutes: ['{m}分{n}秒', '{m}分{n}秒', '{m}m {n}s', '{m}分{n}秒', '{m}분 {n}초', '{m}د {n}ث'],
+      durationHours: ['{h}小时{m}分', '{h}小時{m}分', '{h}h {m}m', '{h}時間{m}分', '{h}시간 {m}분', '{h}س {m}د'],
+      noAuditTime: ['无审计时间', '無審計時間', 'No audit time', '審査時刻なし', '감사 시간 없음', 'لا وقت للتدقيق'],
+      auditedAgo: ['审计于{time}', '審計於{time}', 'Audited {time}', '{time}に審査', '{time} 감사', 'دُقّق {time}'],
+      auditRefresh: ['审计于{time}，建议刷新证据', '審計於{time}，建議更新證據', 'Audited {time}; refresh evidence', '{time}に審査。証拠を更新してください', '{time} 감사; 증거 갱신 권장', 'دُقّق {time}؛ حدّث الأدلة'],
+      auditStale: ['审计于{time}，数据已陈旧', '審計於{time}，資料已陳舊', 'Audited {time}; data is stale', '{time}に審査。データは古くなっています', '{time} 감사; 데이터가 오래됨', 'دُقّق {time}؛ البيانات قديمة'],
+      manualApproved: ['人工已通过', '人工已通過', 'Manually approved', '手動承認済み', '수동 승인됨', 'تمت الموافقة يدويًا'],
+      ignored: ['已忽略', '已忽略', 'Ignored', '無視済み', '무시됨', 'تم التجاهل'],
+      manualExpired: ['原人工通过已失效', '原人工通過已失效', 'Manual approval expired', '手動承認は失効', '수동 승인 만료', 'انتهت صلاحية الموافقة اليدوية'],
+      statusChain: ['链上候选/待人工看X', '鏈上候選/待人工看X', 'On-chain candidate / review X', 'オンチェーン候補／X要確認', '온체인 후보 / X 확인', 'مرشح على السلسلة / راجع X'],
+      statusWaiting: ['等待复查', '等待複查', 'Waiting for recheck', '再確認待ち', '재검토 대기', 'بانتظار إعادة الفحص'],
+      statusRejected: ['硬门淘汰', '硬門淘汰', 'Hard-gate rejected', '必須条件で除外', '필수 조건 탈락', 'مرفوض بالبوابة الصارمة'],
+      chainBsc: ['BNB链', 'BNB鏈', 'BNB Chain', 'BNBチェーン', 'BNB 체인', 'شبكة BNB'],
+      chainEth: ['以太坊', '以太坊', 'Ethereum', 'イーサリアム', '이더리움', 'إيثريوم'],
+      chainRobinhood: ['罗宾汉链', '羅賓漢鏈', 'Robinhood Chain', 'Robinhoodチェーン', '로빈후드 체인', 'شبكة Robinhood'],
+      chainOfflineHint: ['本地服务离线，暂时不能切换链路', '本地服務離線，暫時不能切換鏈路', 'Local service is offline; chain switching is unavailable', 'ローカルサービスがオフラインのため切替できません', '로컬 서비스가 오프라인이라 체인을 바꿀 수 없습니다', 'الخدمة المحلية غير متصلة؛ لا يمكن تبديل الشبكة'],
+      chainPendingHint: ['当前：{current} · 本轮结束后切换到{pending}', '目前：{current} · 本輪結束後切換到{pending}', 'Current: {current} · switch to {pending} after this cycle', '現在：{current}・今回終了後に{pending}へ切替', '현재: {current} · 이번 주기 후 {pending}(으)로 전환', 'الحالية: {current} · التبديل إلى {pending} بعد هذه الدورة'],
+      chainClickHint: ['当前：{chain} · 点击其他链会立即重新扫描', '目前：{chain} · 點擊其他鏈會立即重新掃描', 'Current: {chain} · choose another chain to rescan now', '現在：{chain}・別チェーンを選ぶと即再スキャン', '현재: {chain} · 다른 체인을 누르면 즉시 재스캔', 'الحالية: {chain} · اختر شبكة أخرى لإعادة المسح فورًا'],
+      chainUnavailableHint: ['当前：{chain} · 后端尚未启用多链切换', '目前：{chain} · 後端尚未啟用多鏈切換', 'Current: {chain} · backend has not enabled multi-chain switching', '現在：{chain}・バックエンドの複数チェーン切替は未有効', '현재: {chain} · 백엔드 다중 체인 전환 미지원', 'الحالية: {chain} · تبديل الشبكات غير مفعّل في الخلفية'],
+      switchingToast: ['正在切换扫描链路并启动新一轮扫描……', '正在切換掃描鏈路並啟動新一輪掃描……', 'Switching chain and starting a new scan…', 'チェーンを切替えて新規スキャンを開始中…', '체인 전환 및 새 스캔 시작 중…', 'جارٍ تبديل الشبكة وبدء مسح جديد…'],
+      switchAccepted: ['链路切换已受理，正在等待首轮结果', '鏈路切換已受理，正在等待首輪結果', 'Chain switch accepted; waiting for first result', '切替を受理。最初の結果を待っています', '체인 전환 수락; 첫 결과 대기 중', 'تم قبول التبديل؛ بانتظار أول نتيجة'],
+      unsupportedChain: ['当前后端不支持这条链', '目前後端不支援這條鏈', 'This chain is not supported by the backend', 'このチェーンは未対応です', '백엔드가 이 체인을 지원하지 않습니다', 'هذه الشبكة غير مدعومة في الخلفية'],
+      switchUnavailable: ['后端尚未启用链路切换', '後端尚未啟用鏈路切換', 'Chain switching is not enabled', 'チェーン切替は未有効です', '체인 전환이 활성화되지 않았습니다', 'تبديل الشبكات غير مفعّل'],
+      scanBusy: ['当前扫描尚未结束，请稍后再切换', '目前掃描尚未結束，請稍後再切換', 'A scan is still running; switch later', 'スキャン中です。後で切替えてください', '스캔이 진행 중입니다. 잠시 후 전환하세요', 'المسح جارٍ؛ بدّل لاحقًا'],
+      switchFailed: ['链路切换失败，请稍后重试', '鏈路切換失敗，請稍後重試', 'Chain switch failed; try again later', '切替に失敗。後でもう一度お試しください', '체인 전환 실패; 나중에 다시 시도하세요', 'فشل تبديل الشبكة؛ حاول لاحقًا'],
+      copyContract: ['复制合约', '複製合約', 'Copy contract', 'コントラクトをコピー', '계약 복사', 'نسخ العقد'],
+      gmgnDetails: ['GMGN详情', 'GMGN詳情', 'GMGN details', 'GMGN詳細', 'GMGN 상세', 'تفاصيل GMGN'],
+      officialX: ['官方X账号', '官方X帳號', 'Official X', '公式X', '공식 X', 'حساب X الرسمي'],
+      liveXSearch: ['X实时搜索', 'X即時搜尋', 'Live X search', 'Xリアルタイム検索', 'X 실시간 검색', 'بحث X المباشر'],
+      visitWebsite: ['访问官网', '造訪官網', 'Visit website', '公式サイト', '공식 웹사이트', 'زيارة الموقع'],
+      noWebsite: ['官网无', '無官網', 'No website', '公式サイトなし', '웹사이트 없음', 'لا يوجد موقع'],
+      officialXFound: ['已有官方X账号，请人工查看评论与回复', '已有官方X帳號，請人工查看留言與回覆', 'Official X found; manually review comments and replies', '公式Xあり。コメントと返信を手動確認', '공식 X 있음; 댓글과 답글을 직접 확인하세요', 'يوجد حساب X رسمي؛ راجع التعليقات والردود يدويًا'],
+      officialXMissing: ['未发现官方X账号，可按合约地址搜索讨论', '未發現官方X帳號，可按合約地址搜尋討論', 'No official X found; search by contract address', '公式Xなし。コントラクトで議論を検索', '공식 X 없음; 계약 주소로 검색하세요', 'لم يُعثر على حساب X رسمي؛ ابحث بعنوان العقد'],
+      minutesValue: ['{n}分钟', '{n}分鐘', '{n} min', '{n}分', '{n}분', '{n} دقيقة'],
+      hoursValue: ['{n}小时', '{n}小時', '{n} hr', '{n}時間', '{n}시간', '{n} ساعة'],
+      permissionSol: ['铸币/冻结权限撤销', '鑄幣/凍結權限撤銷', 'Mint/freeze revoked', 'Mint/Freeze権限撤回', '민팅/동결 권한 철회', 'إلغاء صلاحية السك/التجميد'],
+      permissionEvm: ['所有权放弃', '所有權放棄', 'Ownership renounced', '所有権放棄', '소유권 포기', 'التنازل عن الملكية'],
+      cannotPassGate: ['链上硬门未通过，不能标记为人工通过', '鏈上硬門未通過，不能標記為人工通過', 'Hard gates failed; manual approval is disabled', '必須条件未通過のため手動承認できません', '필수 조건 탈락으로 수동 승인할 수 없습니다', 'فشلت البوابات الصارمة؛ لا يمكن الموافقة يدويًا'],
+      cannotPassStale: ['审计证据已超过10分钟，请等待系统复查', '審計證據已超過10分鐘，請等待系統複查', 'Audit evidence is older than 10 minutes; wait for recheck', '審査証拠が10分超。再確認を待ってください', '감사 증거가 10분 초과; 재검토를 기다리세요', 'دليل التدقيق أقدم من 10 دقائق؛ انتظر إعادة الفحص'],
+      dexReview: ['Dex复核 {mc} / LP {lp}', 'Dex複核 {mc} / LP {lp}', 'Dex check {mc} / LP {lp}', 'Dex確認 {mc} / LP {lp}', 'Dex 검토 {mc} / LP {lp}', 'فحص Dex {mc} / LP {lp}'],
+      dexUnsupported: ['Dex当前链未覆盖', 'Dex目前鏈未覆蓋', 'Dex does not cover this chain', 'Dexはこのチェーン未対応', 'Dex가 이 체인을 지원하지 않음', 'Dex لا يغطي هذه الشبكة'],
+      dexPending: ['Dex数据待复核', 'Dex資料待複核', 'Dex data pending', 'Dexデータ確認待ち', 'Dex 데이터 검토 대기', 'بيانات Dex بانتظار الفحص'],
+      goPlusFatal: ['GoPlus发现致命风险', 'GoPlus發現致命風險', 'GoPlus found a fatal risk', 'GoPlusが致命的リスクを検出', 'GoPlus 치명적 위험 발견', 'وجد GoPlus خطرًا قاتلًا'],
+      goPlusClear: ['GoPlus未见致命项', 'GoPlus未見致命項', 'GoPlus found no fatal flag', 'GoPlusに致命項目なし', 'GoPlus 치명적 항목 없음', 'لم يجد GoPlus علامة قاتلة'],
+      goPlusUnsupported: ['GoPlus当前链未覆盖', 'GoPlus目前鏈未覆蓋', 'GoPlus does not cover this chain', 'GoPlusはこのチェーン未対応', 'GoPlus가 이 체인을 지원하지 않음', 'GoPlus لا يغطي هذه الشبكة'],
+      goPlusPending: ['GoPlus证据待复核', 'GoPlus證據待複核', 'GoPlus evidence pending', 'GoPlus証拠確認待ち', 'GoPlus 증거 검토 대기', 'دليل GoPlus بانتظار الفحص'],
+      liquidity: ['流动性 {value}', '流動性 {value}', 'Liquidity {value}', '流動性 {value}', '유동성 {value}', 'السيولة {value}'],
+      openSource: ['合约开源', '合約開源', 'Verified source', 'ソース検証済み', '소스 검증', 'المصدر موثّق'],
+      lpBurned: ['LP已销毁', 'LP已銷毀', 'LP burned', 'LP焼却済み', 'LP 소각됨', 'تم حرق LP'],
+      lpLocked: ['LP锁仓{value}', 'LP鎖倉{value}', 'LP locked {value}', 'LPロック {value}', 'LP 잠금 {value}', 'قفل LP {value}'],
+      distinctSellers: ['不同卖家 {n}个', '不同賣家 {n}個', '{n} distinct sellers', '異なる売り手 {n}', '서로 다른 판매자 {n}명', '{n} بائعين مختلفين'],
+      taxLabel: ['买税/卖税 {buy}/{sell}', '買稅/賣稅 {buy}/{sell}', 'Buy/sell tax {buy}/{sell}', '売買税 {buy}/{sell}', '매수/매도세 {buy}/{sell}', 'ضريبة الشراء/البيع {buy}/{sell}'],
+      rugLabel: ['跑路风险 {value}', '跑路風險 {value}', 'Rug risk {value}', 'ラグリスク {value}', '러그 위험 {value}', 'خطر الاحتيال {value}'],
+      top10Label: ['前10持仓 {value}', '前10持倉 {value}', 'Top-10 ownership {value}', '上位10保有 {value}', '상위 10 보유율 {value}', 'حيازة أكبر 10 {value}'],
+      ordinaryWallets: ['普通钱包 {ordinary}/{sampled}个', '普通錢包 {ordinary}/{sampled}個', 'Ordinary wallets {ordinary}/{sampled}', '通常ウォレット {ordinary}/{sampled}', '일반 지갑 {ordinary}/{sampled}', 'محافظ عادية {ordinary}/{sampled}'],
+      ordinaryHold: ['普通钱包持仓 {value}', '普通錢包持倉 {value}', 'Ordinary-wallet ownership {value}', '通常ウォレット保有 {value}', '일반 지갑 보유율 {value}', 'حيازة المحافظ العادية {value}'],
+      botsLabel: ['机器人 {value}', '機器人 {value}', 'Bots {value}', 'Bot {value}', '봇 {value}', 'الروبوتات {value}'],
+      linkedLabel: ['同源 {value}', '同源 {value}', 'Linked {value}', '同一資金源 {value}', '연계 {value}', 'المترابطة {value}'],
+      marketUnknown: ['盘面证据未知', '盤面證據未知', 'Price-action evidence unknown', '値動き証拠不明', '가격 움직임 증거 불명', 'دليل حركة السعر غير معروف'],
+      return5m: ['5分钟涨跌 {value}', '5分鐘漲跌 {value}', '5m return {value}', '5分騰落 {value}', '5분 수익률 {value}', 'عائد 5د {value}'],
+      maxDrawdown: ['最大回撤 {value}', '最大回撤 {value}', 'Max drawdown {value}', '最大ドローダウン {value}', '최대 낙폭 {value}', 'أقصى تراجع {value}'],
+      manualReview: ['人工复核', '人工複核', 'Manual review', '手動確認', '수동 검토', 'مراجعة يدوية'],
+      cancelPass: ['取消人工通过', '取消人工通過', 'Undo approval', '承認を取消', '승인 취소', 'إلغاء الموافقة'],
+      manualPass: ['人工通过', '人工通過', 'Approve manually', '手動承認', '수동 승인', 'موافقة يدوية'],
+      cancelIgnore: ['取消忽略', '取消忽略', 'Undo ignore', '無視を取消', '무시 취소', 'إلغاء التجاهل'],
+      ignoreAction: ['忽略', '忽略', 'Ignore', '無視', '무시', 'تجاهل'],
+      summaryQueue: ['；审计队列{total}个，当前到期{due}个', '；審計佇列{total}個，目前到期{due}個', '; audit queue {total}, due now {due}', '・審査キュー{total}件、期限到来{due}件', '; 감사 대기열 {total}개, 현재 만료 {due}개', '؛ قائمة التدقيق {total}، المستحق الآن {due}'],
+      resultSummary: ['当前显示 {shown} 条，共 {total} 条近30分钟审计快照{queue}；黄色和红色背景表示证据已经变旧。', '目前顯示 {shown} 筆，共 {total} 筆近30分鐘審計快照{queue}；黃色和紅色背景表示證據已變舊。', 'Showing {shown} of {total} audit snapshots from the last 30 min{queue}; yellow/red rows have aging evidence.', '過去30分の審査{total}件中{shown}件を表示{queue}。黄・赤は証拠の経時劣化を示します。', '최근 30분 감사 스냅샷 {total}개 중 {shown}개 표시{queue}; 노랑/빨강은 오래된 증거입니다.', 'عرض {shown} من {total} لقطة تدقيق لآخر 30 دقيقة{queue}؛ الأصفر/الأحمر يعني قدم الأدلة.'],
+      noFilteredRows: ['没有符合当前筛选条件的记录。清空搜索或切换筛选条件后再看。', '沒有符合目前篩選條件的記錄。請清除搜尋或切換篩選條件。', 'No records match these filters. Clear search or change the filter.', '条件に一致する記録はありません。検索を消すか条件を変更してください。', '현재 필터와 일치하는 기록이 없습니다. 검색을 지우거나 필터를 바꾸세요.', 'لا سجلات تطابق التصفية. امسح البحث أو غيّر المرشح.'],
+      thToken: ['代币与人工入口', '代幣與人工入口', 'Token & review links', 'トークン／確認リンク', '토큰 및 검토 링크', 'الرمز وروابط المراجعة'],
+      thMarket: ['市值/流动性', '市值/流動性', 'Market cap / liquidity', '時価総額／流動性', '시가총액 / 유동성', 'القيمة السوقية / السيولة'],
+      thAge: ['币龄/审计时间', '幣齡/審計時間', 'Age / audit time', '経過時間／審査時刻', '생성 경과 / 감사 시간', 'العمر / وقت التدقيق'],
+      thContract: ['合约/权限', '合約/權限', 'Contract / authority', 'コントラクト／権限', '계약 / 권한', 'العقد / الصلاحيات'],
+      thLp: ['LP状态', 'LP狀態', 'LP status', 'LP状態', 'LP 상태', 'حالة LP'],
+      thHoneypot: ['貔貅证据', '貔貅證據', 'Sellability evidence', '売却可能性の証拠', '매도 가능 증거', 'دليل إمكانية البيع'],
+      thRisk: ['税费/风险/集中度', '稅費/風險/集中度', 'Tax / risk / concentration', '税／リスク／集中度', '세금 / 위험 / 집중도', 'الضريبة / الخطر / التركّز'],
+      thOrdinary: ['普通钱包代理', '普通錢包代理', 'Ordinary-wallet proxies', '通常ウォレット代理', '일반 지갑 대리', 'وكلاء المحافظ العادية'],
+      thBots: ['机器人/同源钱包', '機器人/同源錢包', 'Bots / linked wallets', 'Bot／同一資金源', '봇 / 연계 지갑', 'روبوتات / محافظ مترابطة'],
+      thPrice: ['5分钟盘面', '5分鐘盤面', '5-minute price action', '5分の値動き', '5분 가격 움직임', 'حركة السعر 5 دقائق'],
+      thX: ['X社区', 'X社群', 'X community', 'Xコミュニティ', 'X 커뮤니티', 'مجتمع X'],
+      thConclusion: ['结论与人工标记', '結論與人工標記', 'Result & manual mark', '結論／手動マーク', '결론 및 수동 표시', 'النتيجة والعلامة اليدوية'],
+      providerDiscovery: ['发现源{ok}/{total}', '發現源{ok}/{total}', 'Discovery {ok}/{total}', '発見元 {ok}/{total}', '발견 소스 {ok}/{total}', 'مصدر الاكتشاف {ok}/{total}'],
+      providerAudit: ['深审接口{ok}/{total}', '深審介面{ok}/{total}', 'Audit APIs {ok}/{total}', '審査API {ok}/{total}', '심층 감사 API {ok}/{total}', 'واجهات التدقيق {ok}/{total}'],
+      providerSecondary: ['外部复核{ok}/{total}', '外部複核{ok}/{total}', 'Secondary checks {ok}/{total}', '外部確認 {ok}/{total}', '외부 검토 {ok}/{total}', 'الفحوص الخارجية {ok}/{total}'],
+      gmgnOnly: ['当前链仅GMGN覆盖', '目前鏈僅GMGN覆蓋', 'Only GMGN covers this chain', 'このチェーンはGMGNのみ', '이 체인은 GMGN만 지원', 'هذه الشبكة مغطاة من GMGN فقط'],
+      checkedAgo: ['检查于{time}', '檢查於{time}', 'Checked {time}', '{time}に確認', '{time} 확인', 'فُحص {time}'],
+      providerPartial: ['部分可用', '部分可用', 'Partially available', '一部利用可', '일부 사용 가능', 'متاح جزئيًا'],
+      providerNormal: ['正常', '正常', 'Normal', '正常', '정상', 'طبيعي'],
+      incompleteRound: ['本轮数据可能不完整', '本輪資料可能不完整', 'This cycle may be incomplete', '今回のデータは不完全な可能性があります', '이번 주기 데이터가 불완전할 수 있습니다', 'قد تكون بيانات هذه الدورة غير مكتملة'],
+      gmgnNormal: ['GMGN接口正常', 'GMGN介面正常', 'GMGN API is normal', 'GMGN API正常', 'GMGN API 정상', 'واجهة GMGN طبيعية'],
+      recentCheck: ['最近检查{time}', '最近檢查{time}', 'Last checked {time}', '最終確認 {time}', '최근 확인 {time}', 'آخر فحص {time}'],
+      noCheck: ['暂无检查记录', '暫無檢查記錄', 'No check record', '確認記録なし', '확인 기록 없음', 'لا سجل فحص'],
+      retryAt: ['预计{time}后恢复', '預計{time}後恢復', 'Expected recovery after {time}', '{time}以降に復旧見込み', '{time} 이후 복구 예상', 'التعافي متوقع بعد {time}'],
+      retryWaiting: ['等待自动重试', '等待自動重試', 'Waiting for automatic retry', '自動再試行待ち', '자동 재시도 대기', 'بانتظار إعادة المحاولة تلقائيًا'],
+      notAuthorized: ['尚未授权', '尚未授權', 'Not authorized', '未認証', '인증되지 않음', 'غير مفوّض'],
+      configReadOnly: ['需要配置GMGN只读接口', '需要設定GMGN唯讀介面', 'Configure the GMGN read-only API', 'GMGN読み取り専用APIの設定が必要', 'GMGN 읽기 전용 API 설정 필요', 'يلزم إعداد واجهة GMGN للقراءة فقط'],
+      requestError: ['请求异常', '請求異常', 'Request error', '取得異常', '요청 오류', 'خطأ في الطلب'],
+      lastRoundSuccess: ['最近一轮读取成功', '最近一輪讀取成功', 'Latest cycle succeeded', '直近サイクル取得成功', '최근 주기 읽기 성공', 'نجحت الدورة الأخيرة'],
+      partialEvidence: ['本轮部分证据不完整，等待自动复查', '本輪部分證據不完整，等待自動複查', 'Some evidence is incomplete; waiting for automatic recheck', '一部証拠が不完全。自動再確認待ち', '일부 증거 불완전; 자동 재검토 대기', 'بعض الأدلة غير مكتملة؛ بانتظار إعادة الفحص'],
+      reading: ['正在读取', '正在讀取', 'Reading', '取得中', '읽는 중', 'جارٍ القراءة'],
+      waitingRound: ['等待本轮扫描结果', '等待本輪掃描結果', 'Waiting for this cycle', '今回の結果待ち', '이번 주기 결과 대기', 'بانتظار نتيجة هذه الدورة'],
+      initializing: ['正在初始化', '正在初始化', 'Initializing', '初期化中', '초기화 중', 'جارٍ التهيئة'],
+      waitingFirstScan: ['等待首次扫描', '等待首次掃描', 'Waiting for first scan', '初回スキャン待ち', '첫 스캔 대기', 'بانتظار أول مسح'],
+      noData: ['无数据', '無資料', 'No data', 'データなし', '데이터 없음', 'لا بيانات'],
+      notCompletedScan: ['尚未完成扫描', '尚未完成掃描', 'No completed scan yet', '完了スキャンなし', '완료된 스캔 없음', 'لا يوجد مسح مكتمل'],
+      fresh: ['新鲜', '新鮮', 'Fresh', '新鮮', '최신', 'حديث'],
+      delayed: ['延迟', '延遲', 'Delayed', '遅延', '지연', 'متأخر'],
+      expired: ['已过期', '已過期', 'Expired', '期限切れ', '만료됨', 'منتهي الصلاحية'],
+      waitNewResult: ['{time}，正在等待新结果', '{time}，正在等待新結果', '{time}; waiting for new result', '{time}。新しい結果待ち', '{time}; 새 결과 대기', '{time}؛ بانتظار نتيجة جديدة'],
+      staleWarning: ['{time}，不要据此做人工判断', '{time}，請勿據此做人工判斷', '{time}; do not use this for manual judgment', '{time}。手動判断に使わないでください', '{time}; 수동 판단에 사용하지 마세요', '{time}؛ لا تستخدمها للحكم اليدوي'],
+      cannotReadPort: ['无法读取端口3791', '無法讀取連接埠3791', 'Cannot read port 3791', 'ポート3791を取得できません', '포트 3791 읽기 실패', 'تعذرت قراءة المنفذ 3791'],
+      localOffline: ['本地服务离线', '本地服務離線', 'Local service offline', 'ローカルサービスはオフライン', '로컬 서비스 오프라인', 'الخدمة المحلية غير متصلة'],
+      cannotJudge: ['无法判断', '無法判斷', 'Cannot determine', '判定不可', '판단 불가', 'لا يمكن التحديد'],
+      restoreService: ['请先恢复本地服务', '請先恢復本地服務', 'Restore the local service first', 'ローカルサービスを復旧してください', '로컬 서비스를 먼저 복구하세요', 'أعد الخدمة المحلية أولًا'],
+      localReadOnly: ['本地只读服务 · 端口3791', '本地唯讀服務 · 連接埠3791', 'Local read-only service · port 3791', 'ローカル読み取り専用・ポート3791', '로컬 읽기 전용 서비스 · 포트 3791', 'خدمة محلية للقراءة فقط · المنفذ 3791'],
+      browserRecord: ['本浏览器记录', '本瀏覽器記錄', 'browser record', 'ブラウザ記録', '브라우저 기록', 'سجل المتصفح'],
+      browserNoSuccess: ['本浏览器暂无成功记录', '本瀏覽器暫無成功記錄', 'No successful record in this browser', 'このブラウザに成功記録なし', '이 브라우저에 성공 기록 없음', 'لا سجل ناجح في هذا المتصفح'],
+      afterDuration: ['{time}后', '{time}後', 'in {time}', '{time}後', '{time} 후', 'بعد {time}'],
+      waitRateRelease: ['等待限频解除', '等待限頻解除', 'Waiting for rate limit', 'レート制限解除待ち', '속도 제한 해제 대기', 'بانتظار انتهاء حد المعدل'],
+      waitNextSchedule: ['等待下轮调度', '等待下輪排程', 'Waiting for next cycle', '次回実行待ち', '다음 주기 대기', 'بانتظار الدورة التالية'],
+      possiblyScanning: ['可能正在扫描', '可能正在掃描', 'Possibly scanning', 'スキャン中の可能性', '스캔 중일 수 있음', 'قد يكون المسح جاريًا'],
+      waitingNewResult: ['等待新结果', '等待新結果', 'Waiting for new result', '新しい結果待ち', '새 결과 대기', 'بانتظار نتيجة جديدة'],
+      backendConfirmedScanning: ['后端已确认正在执行', '後端已確認正在執行', 'Backend confirms scan is running', 'バックエンドで実行を確認', '백엔드 실행 확인', 'أكدت الخلفية أن المسح جارٍ'],
+      noLiveProgress: ['后端未提供实时进度标记', '後端未提供即時進度標記', 'No live progress flag from backend', 'リアルタイム進捗情報なし', '백엔드 실시간 진행 정보 없음', 'لا توفر الخلفية مؤشر تقدم مباشر'],
+      noSuccessfulData: ['尚无成功数据', '尚無成功資料', 'No successful data yet', '成功データなし', '성공 데이터 없음', 'لا بيانات ناجحة بعد'],
+      authNotice: ['输入你的 GMGN 只读 API Key，点击 ✓ 验证后自动开始扫描。没有 Key 可点击“获取 API Key”。', '輸入你的 GMGN 唯讀 API Key，點擊 ✓ 驗證後自動開始掃描。沒有 Key 可點擊「取得 API Key」。', 'Enter your GMGN read-only API key and click ✓ to verify and scan. Use “Get an API key” if needed.', 'GMGNの読取専用APIキーを入力し、✓で確認するとスキャンが始まります。キー取得リンクも利用できます。', 'GMGN 읽기 전용 API 키를 입력하고 ✓를 누르면 검증 후 스캔이 시작됩니다. 키가 없으면 발급 링크를 이용하세요.', 'أدخل مفتاح GMGN للقراءة فقط واضغط ✓ للتحقق وبدء المسح. استخدم رابط الحصول على مفتاح عند الحاجة.'],
+      rateNotice: ['GMGN请求频率受限。{retry}系统会在后续轮次自动重试，不会下单。', 'GMGN請求頻率受限。{retry}系統會在後續輪次自動重試，不會下單。', 'GMGN is rate-limited. {retry}A later cycle will retry automatically; no order is placed.', 'GMGNのレート制限中。{retry}後続サイクルで自動再試行します。注文はしません。', 'GMGN 속도 제한 상태입니다. {retry}다음 주기에서 자동 재시도하며 주문하지 않습니다.', 'GMGN محدود المعدل. {retry}ستعيد دورة لاحقة المحاولة تلقائيًا؛ لا أوامر.'],
+      expectedRecovery: ['预计恢复时间：{time}。', '預計恢復時間：{time}。', 'Expected recovery: {time}. ', '復旧見込み：{time}。', '예상 복구 시간: {time}. ', 'التعافي المتوقع: {time}. '],
+      scanErrorNotice: ['扫描发生异常：{detail}', '掃描發生異常：{detail}', 'Scan error: {detail}', 'スキャン異常：{detail}', '스캔 오류: {detail}', 'خطأ في المسح: {detail}'],
+      waitAutoRetry: ['等待下一轮自动重试', '等待下一輪自動重試', 'Waiting for the next automatic retry', '次回の自動再試行待ち', '다음 자동 재시도 대기', 'بانتظار إعادة المحاولة التالية'],
+      scanningNotice: ['正在扫描当前链路并整理证据，请等待本轮完成。页面保留上一轮结果，但会明确标记其审计时间。', '正在掃描目前鏈路並整理證據，請等待本輪完成。頁面保留上一輪結果，但會清楚標記審計時間。', 'Scanning this chain and assembling evidence. The prior result remains visible with its audit time clearly marked.', '現在のチェーンをスキャンし証拠を整理中。前回結果は審査時刻付きで表示します。', '현재 체인을 스캔하고 증거를 정리 중입니다. 이전 결과는 감사 시간과 함께 유지됩니다.', 'جارٍ مسح الشبكة وتجميع الأدلة. تبقى نتيجة الدورة السابقة مع وقت التدقيق بوضوح.'],
+      switchingNotice: ['正在切换扫描链路，旧链候选不会混入新链结果。', '正在切換掃描鏈路，舊鏈候選不會混入新鏈結果。', 'Switching scan chain; old-chain candidates will not mix with new results.', 'チェーン切替中。旧チェーン候補は新結果に混在しません。', '스캔 체인 전환 중; 이전 체인 후보는 새 결과에 섞이지 않습니다.', 'جارٍ تبديل شبكة المسح؛ لن تختلط مرشحات الشبكة القديمة بالنتائج الجديدة.'],
+      degradedNotice: ['本轮有部分GMGN、GoPlus或DexScreener证据缺失，未知项不会冒充安全；系统会自动复查。交易执行永久关闭。', '本輪有部分GMGN、GoPlus或DexScreener證據缺失，未知項不會視為安全；系統會自動複查。交易執行永久關閉。', 'Some GMGN, GoPlus or DexScreener evidence is missing. Unknowns never count as safe; recheck is automatic. Trading is permanently disabled.', 'GMGN／GoPlus／DexScreenerの一部証拠が不足。不明は安全扱いせず自動再確認します。取引は常時無効です。', '일부 GMGN, GoPlus 또는 DexScreener 증거가 누락되었습니다. 미확인은 안전으로 처리하지 않으며 자동 재검토합니다. 거래는 영구 비활성입니다.', 'بعض أدلة GMGN أو GoPlus أو DexScreener مفقودة. المجهول لا يُعد آمنًا وستتم إعادة الفحص؛ التداول معطل دائمًا.'],
+      runningPartialNotice: ['扫描器正在运行，但本轮数据尚不完整（{detail}）；请等待完整复查。交易执行永久关闭。', '掃描器正在運行，但本輪資料尚不完整（{detail}）；請等待完整複查。交易執行永久關閉。', 'Scanner is running, but this cycle is incomplete ({detail}); wait for recheck. Trading is permanently disabled.', 'スキャン稼働中ですが今回データは不完全（{detail}）。再確認を待ってください。取引は常時無効です。', '스캐너는 실행 중이나 이번 데이터가 불완전합니다({detail}). 재검토를 기다리세요. 거래는 영구 비활성입니다.', 'الماسح يعمل لكن الدورة غير مكتملة ({detail})؛ انتظر إعادة الفحص. التداول معطل دائمًا.'],
+      runningNotice: ['扫描器运行中 · 交易执行永久关闭 · X社区采用人工点击复核，不会因为社交热度自动触发交易。', '掃描器運行中 · 交易執行永久關閉 · X社群採人工點擊複核，不會因社交熱度自動觸發交易。', 'Scanner running · trading permanently disabled · X is reviewed manually and social hype never triggers a trade.', 'スキャン稼働中・取引は常時無効・Xは手動確認し、話題性で取引しません。', '스캐너 실행 중 · 거래 영구 비활성 · X는 수동 검토하며 소셜 열기로 거래하지 않습니다.', 'الماسح يعمل · التداول معطل دائمًا · تتم مراجعة X يدويًا ولا تحفز الضجة أي تداول.'],
+      initialNotice: ['雷达正在初始化，请等待首次扫描完成。', '雷達正在初始化，請等待首次掃描完成。', 'Radar is initializing; wait for the first scan.', 'レーダー初期化中。初回スキャンを待ってください。', '레이더 초기화 중; 첫 스캔을 기다리세요.', 'جارٍ تهيئة الرادار؛ انتظر أول مسح.'],
+      eventRateLimited: ['当时触发GMGN请求频率限制，系统已等待后续轮次重试', '當時觸發GMGN請求頻率限制，系統已等待後續輪次重試', 'GMGN was rate-limited; the system queued a later retry', 'GMGNレート制限が発生し、後続サイクルで再試行待ち', 'GMGN 속도 제한 발생; 다음 주기 재시도 대기', 'تم بلوغ حد GMGN؛ أُدرجت إعادة المحاولة لدورة لاحقة'],
+      eventRequestFailed: ['当时数据请求失败，系统已留到下一轮重试', '當時資料請求失敗，系統已留到下一輪重試', 'The data request failed and was left for the next cycle', 'データ取得失敗。次回サイクルへ繰越', '데이터 요청 실패; 다음 주기로 이월', 'فشل طلب البيانات وأُجّل للدورة التالية'],
+      eventChanged: ['雷达状态发生变化', '雷達狀態發生變化', 'Radar status changed', 'レーダー状態が変化', '레이더 상태 변경', 'تغيرت حالة الرادار'],
+      cycleSummary: ['最近尝试 {time} · 单轮耗时{ms}毫秒', '最近嘗試 {time} · 單輪耗時{ms}毫秒', 'Last attempt {time} · cycle {ms} ms', '最終試行 {time}・所要{ms}ms', '최근 시도 {time} · 주기 {ms}ms', 'آخر محاولة {time} · مدة الدورة {ms} مللي ثانية'],
+      completedSamples: ['完成{n}个样本', '完成{n}個樣本', '{n} samples complete', '{n}件完了', '{n}개 표본 완료', '{n} عينة مكتملة'],
+      gateReady: ['调参门槛：{windows}已满50个完成样本；其他周期仍只做观察。', '調參門檻：{windows}已滿50個完成樣本；其他週期仍只做觀察。', 'Tuning gate: {windows} reached 50 samples; other windows remain observation-only.', '調整基準：{windows}は50件到達。他の期間は観測のみ。', '튜닝 기준: {windows} 구간이 50개에 도달; 다른 구간은 관찰용입니다.', 'بوابة الضبط: بلغت {windows} خمسين عينة؛ النوافذ الأخرى للمراقبة فقط.'],
+      window30m: ['30分钟', '30分鐘', '30 min', '30分', '30분', '30 دقيقة'],
+      window2h: ['2小时', '2小時', '2 hr', '2時間', '2시간', 'ساعتان'],
+      window24h: ['24小时', '24小時', '24 hr', '24時間', '24시간', '24 ساعة'],
+      queueDue: ['审计队列{queued}个 · 当前到期{due}个', '審計佇列{queued}個 · 目前到期{due}個', 'Audit queue {queued} · due {due}', '審査キュー{queued}・期限到来{due}', '감사 대기열 {queued} · 만료 {due}', 'قائمة التدقيق {queued} · المستحق {due}'],
+      roundSuccessFail: ['本轮成功{succeeded}个 · 失败{failed}个', '本輪成功{succeeded}個 · 失敗{failed}個', 'This cycle: {succeeded} succeeded · {failed} failed', '今回：成功{succeeded}・失敗{failed}', '이번 주기: 성공 {succeeded} · 실패 {failed}', 'هذه الدورة: نجح {succeeded} · فشل {failed}'],
+      queueEstimate: ['队列预计{minutes}分钟 · 从未审{never}个', '佇列預計{minutes}分鐘 · 從未審{never}個', 'Queue estimate {minutes} min · never audited {never}', '推定{minutes}分・未審査{never}', '대기열 예상 {minutes}분 · 미감사 {never}', 'تقدير القائمة {minutes} دقيقة · لم تُدقق {never}'],
+      waitingRejectCounts: ['等待复查{waiting}个 · 硬门淘汰{rejected}个', '等待複查{waiting}個 · 硬門淘汰{rejected}個', 'Waiting {waiting} · hard rejected {rejected}', '再確認待ち{waiting}・必須条件除外{rejected}', '재검토 대기 {waiting} · 필수 탈락 {rejected}', 'بانتظار الإعادة {waiting} · رفض صارم {rejected}'],
+      localMarkNoTrade: ['仅本浏览器标记 · 不会下单', '僅本瀏覽器標記 · 不會下單', 'Browser-only mark · no order', 'このブラウザのみ・注文なし', '브라우저 전용 표시 · 주문 없음', 'علامة في المتصفح فقط · لا أوامر'],
+      copied: ['合约地址已复制', '合約地址已複製', 'Contract address copied', 'コントラクトをコピーしました', '계약 주소 복사됨', 'تم نسخ عنوان العقد'],
+      copyFailed: ['复制失败，请在GMGN详情中手动复制', '複製失敗，請在GMGN詳情中手動複製', 'Copy failed; copy it from GMGN details', 'コピー失敗。GMGN詳細から手動コピーしてください', '복사 실패; GMGN 상세에서 직접 복사하세요', 'فشل النسخ؛ انسخه من تفاصيل GMGN'],
+      undoApprovedToast: ['已取消人工通过', '已取消人工通過', 'Manual approval removed', '手動承認を取消しました', '수동 승인 취소됨', 'أُلغيت الموافقة اليدوية'],
+      approvedToast: ['已标记人工通过；这不会触发交易', '已標記人工通過；這不會觸發交易', 'Marked approved; this does not trigger a trade', '手動承認済み。取引は発動しません', '수동 승인 표시; 거래는 실행되지 않습니다', 'تمت الموافقة؛ لن يؤدي ذلك إلى تداول'],
+      undoIgnoredToast: ['已取消忽略', '已取消忽略', 'Ignore removed', '無視を取消しました', '무시 취소됨', 'أُلغي التجاهل'],
+      ignoredToast: ['已忽略该记录', '已忽略該記錄', 'Record ignored', '記録を無視しました', '기록 무시됨', 'تم تجاهل السجل'],
+      serviceOfflineNotice: ['暂时无法连接本地雷达服务。现有页面内容可能已经过期，请勿据此进行人工判断。', '暫時無法連接本地雷達服務。現有頁面內容可能已過期，請勿據此進行人工判斷。', 'Cannot reach the local radar. Visible content may be stale; do not use it for manual judgment.', 'ローカルレーダーに接続できません。表示内容は古い可能性があり、判断に使わないでください。', '로컬 레이더 연결 실패. 현재 내용이 오래되었을 수 있으니 수동 판단에 사용하지 마세요.', 'تعذر الوصول إلى الرادار المحلي. قد يكون المحتوى قديمًا؛ لا تستخدمه للحكم اليدوي.'],
+      cannotConnect: ['无法连接', '無法連接', 'Cannot connect', '接続不可', '연결 불가', 'تعذر الاتصال'],
+      checkFailed: ['检查未通过：{check}', '檢查未通過：{check}', 'Check failed: {check}', '不合格：{check}', '검사 실패: {check}', 'فشل الفحص: {check}'],
+      auditRequestFailed: ['深度审计请求暂时失败，系统已安排自动复查', '深度審計請求暫時失敗，系統已安排自動複查', 'Deep audit request failed temporarily; automatic recheck is scheduled', '深度審査取得に一時失敗。自動再確認を予定', '심층 감사 요청 일시 실패; 자동 재검토 예정', 'فشل طلب التدقيق مؤقتًا؛ تمت جدولة إعادة الفحص'],
+      incompleteEvidence: ['必要证据暂未完整返回，未知值不会按安全处理', '必要證據尚未完整回傳，未知值不會視為安全', 'Required evidence is incomplete; unknown values do not count as safe', '必要証拠が不完全。不明値は安全扱いしません', '필수 증거 불완전; 미확인 값은 안전으로 처리하지 않습니다', 'الأدلة المطلوبة غير مكتملة؛ المجهول لا يُعد آمنًا'],
+      sourceConflict: ['多源数据存在冲突，等待重查', '多源資料存在衝突，等待重查', 'Data sources conflict; waiting for recheck', '複数ソースが不一致。再確認待ち', '데이터 소스 충돌; 재검토 대기', 'توجد تعارضات بين المصادر؛ بانتظار إعادة الفحص'],
+      noReasonWaiting: ['深度审计数据暂时不完整，正在等待下一轮复查', '深度審計資料暫時不完整，正在等待下一輪複查', 'Deep-audit data is incomplete; waiting for the next recheck', '深度審査データ不完全。次回確認待ち', '심층 감사 데이터 불완전; 다음 재검토 대기', 'بيانات التدقيق غير مكتملة؛ بانتظار الإعادة التالية'],
+      chainPassNextX: ['链上硬门全部通过，下一步请人工检查X社区', '鏈上硬門全部通過，下一步請人工檢查X社群', 'All on-chain hard gates passed; review X manually next', 'オンチェーン必須条件通過。次にXを手動確認', '온체인 필수 조건 통과; 다음은 X 수동 확인', 'اجتازت كل البوابات على السلسلة؛ راجع X يدويًا'],
+      noFailureDetail: ['没有可解释的失败明细，请在GMGN详情中复核', '沒有可解釋的失敗明細，請在GMGN詳情中複核', 'No explainable failure detail; review GMGN details', '説明可能な失敗詳細なし。GMGN詳細を確認', '설명 가능한 실패 상세 없음; GMGN 상세 확인', 'لا تفاصيل فشل قابلة للتفسير؛ راجع تفاصيل GMGN']
+    };
+
+    let currentLocale = 'zh-CN';
+    function t(key, variables) {
+      const values = messages[key];
+      const index = Math.max(0, supportedLocales.indexOf(currentLocale));
+      let result = values ? (values[index] || values[0]) : key;
+      result = String(result);
+      return result.replace(/\{(\w+)\}/g, function (_, name) {
+        return variables && variables[name] !== undefined ? String(variables[name]) : '{' + name + '}';
+      });
+    }
+
+    function applyStaticTranslations() {
+      document.documentElement.lang = currentLocale;
+      document.documentElement.dir = currentLocale === 'ar' ? 'rtl' : 'ltr';
+      document.title = t('appTitle');
+      const selector = byId('languageSelect');
+      if (selector) selector.value = currentLocale;
+      document.querySelectorAll('[data-i18n]').forEach(function (element) {
+        element.textContent = t(element.getAttribute('data-i18n'));
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(function (element) {
+        element.setAttribute('placeholder', t(element.getAttribute('data-i18n-placeholder')));
+      });
+      document.querySelectorAll('[data-i18n-aria]').forEach(function (element) {
+        element.setAttribute('aria-label', t(element.getAttribute('data-i18n-aria')));
+      });
+    }
+
+    function setLocale(locale, rerender) {
+      currentLocale = supportedLocales.includes(locale) ? locale : 'zh-CN';
+      writeStorage('memeRadarLanguageV1', currentLocale);
+      applyStaticTranslations();
+      if (rerender) {
+        if (lastData) render(lastData, true);
+        else {
+          renderChainSwitcher(null);
+          renderTelemetry();
+          byId('notice').textContent = t('loadingStatus');
+        }
+      }
+    }
+
+    const number = function (value, fallback) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : (fallback === undefined ? 0 : fallback);
+    };
+    const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const escapeHtml = function (value) {
+      return String(value === undefined || value === null ? '' : value).replace(/[&<>"']/g, function (character) {
+        return escapeMap[character];
+      });
+    };
+    const hasFiniteValue = function (value) {
+      return value !== undefined && value !== null && value !== '' && Number.isFinite(Number(value));
+    };
+    const formatCount = function (value) {
+      return hasFiniteValue(value) ? Number(value).toLocaleString(currentLocale) : t('unknown');
+    };
+    const formatMoney = function (value) {
+      if (!hasFiniteValue(value)) return t('unknown');
+      const amount = number(value);
+      try {
+        return new Intl.NumberFormat(currentLocale, {
+          style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: amount >= 1000000 ? 2 : 1
+        }).format(amount);
+      } catch {
+        return '$' + amount.toFixed(0);
+      }
+    };
+    const formatPercent = function (value, unknownText) {
+      if (!hasFiniteValue(value)) return unknownText || t('unknown');
+      return new Intl.NumberFormat(currentLocale, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(Number(value));
+    };
+    const formatSignedPercent = function (value) {
+      if (!hasFiniteValue(value)) return t('none');
+      const parsed = Number(value);
+      return (parsed > 0 ? '+' : '') + new Intl.NumberFormat(currentLocale, { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(parsed);
+    };
+    const formatClock = function (value) {
+      return value ? new Date(value).toLocaleString(currentLocale, { hour12: false }) : '--';
+    };
+    const formatDuration = function (milliseconds) {
+      const seconds = Math.max(0, Math.floor(number(milliseconds) / 1000));
+      if (seconds < 60) return t('durationSeconds', { n: seconds.toLocaleString(currentLocale) });
+      if (seconds < 3600) return t('durationMinutes', { m: Math.floor(seconds / 60).toLocaleString(currentLocale), n: (seconds % 60).toLocaleString(currentLocale) });
+      return t('durationHours', { h: Math.floor(seconds / 3600).toLocaleString(currentLocale), m: Math.floor((seconds % 3600) / 60).toLocaleString(currentLocale) });
+    };
+    const relativeTime = function (value, now) {
+      if (!value) return t('noRecord');
+      const difference = Math.max(0, (now || Date.now()) - Number(value));
+      const formatter = new Intl.RelativeTimeFormat(currentLocale, { numeric: 'always' });
+      if (difference < 60000) return formatter.format(-Math.max(0, Math.round(difference / 1000)), 'second');
+      if (difference < 3600000) return formatter.format(-Math.round(difference / 60000), 'minute');
+      return formatter.format(-Math.round(difference / 360000) / 10, 'hour');
+    };
+    const safeUrl = function (value) {
+      try {
+        const url = new URL(String(value || ''));
+        return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+      } catch {
+        return '';
+      }
+    };
+    const knownAtMost = function (value, maximum) {
+      return hasFiniteValue(value) && Number(value) <= maximum;
+    };
+    const hasChinese = function (value) { return /[\u3400-\u9fff]/.test(String(value || '')); };
+    const safeMessage = function (value, fallback) {
+      const message = String(value || '');
+      if (/HTTP\s*429|RATE_LIMIT|请求频率/i.test(message)) return t('rateLimitedSafe');
+      if (/Command failed/i.test(message)) return t('requestFailedSafe');
+      if ((currentLocale === 'zh-CN' || currentLocale === 'zh-TW') && hasChinese(message)) return message;
+      return fallback || t('sourceChanged');
+    };
+
+    const statusKeys = {
+      STARTING: 'preparing',
+      RUNNING: 'statusRunning',
+      SCANNING: 'statusScanning',
+      SWITCHING: 'statusSwitching',
+      DEGRADED: 'statusDegraded',
+      RATE_LIMITED: 'statusRateLimited',
+      ERROR: 'statusError',
+      GMGN_AUTH_REQUIRED: 'statusAuth',
+      STATE_ERROR: 'statusStateError'
+    };
+
+    const defaultPolicy = {
+      scanIntervalMs: 120000,
+      minimumAgeMinutes: 5,
+      priorityMarketCap: [20000, 80000],
+      minLpLockedRate: 0.80,
+      strictLiquidity: 8000,
+      maxBuyTax: 0.05,
+      maxSellTax: 0.05,
+      maxRugRatio: 0.20,
+      maxTop10Rate: 0.30,
+      maxInsiderRate: 0.15,
+      maxBundlerRate: 0.15,
+      maxSniperHoldRate: 0.08,
+      maxBotHoldRate: 0.20,
+      maxLinkedHoldRate: 0.10,
+      minOrdinaryWallets: 8
+    };
+    const chainCatalog = [
+      { id: 'sol', label: 'Solana' },
+      { id: 'bsc', labelKey: 'chainBsc' },
+      { id: 'base', label: 'Base' },
+      { id: 'eth', labelKey: 'chainEth' },
+      { id: 'robinhood', labelKey: 'chainRobinhood' },
+      { id: 'arc', label: 'Arc' },
+      { id: 'stable', label: 'Stable' }
+    ];
+
+    function chainLabel(chain) {
+      return chain && chain.labelKey ? t(chain.labelKey) : String(chain && chain.label || '');
+    }
+
+    let lastData = null;
+    let serviceOnline = false;
+    let rowsCache = [];
+    let toastTimer = null;
+    let chainSwitching = false;
+    let rowsFingerprint = '';
+
+    function readStorage(key, fallback) {
+      try {
+        const value = localStorage.getItem(key);
+        return value === null ? fallback : JSON.parse(value);
+      } catch {
+        return fallback;
+      }
+    }
+    function writeStorage(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+    }
+    let manualMarks = readStorage('robinhoodRadarManualMarksV1', {});
+    let viewChain = readStorage('memeRadarViewChainV1', '');
+    if (!chainCatalog.some(function (chain) { return chain.id === viewChain; })) viewChain = '';
+    let liveEnabled = readStorage('memeRadarLiveEnabledV1', true) !== false;
+    let liveData = null;
+    let liveBusy = false;
+    let liveOffline = false;
+    let liveFingerprint = '';
+    const liveQueued = new Map();
+    let selectedChainsDirty = false;
+    let noteTarget = null;
+    let alertsEnabled = readStorage('memeRadarAlertsEnabledV1', false);
+    let alertsSince = readStorage('memeRadarAlertsSinceV1', Date.now());
+    let offlineSince = 0;
+
+    function annotationFor(chain, address) {
+      const annotations = lastData && lastData.annotations || {};
+      return annotations[chain + ':' + addressIdentity(address)] || { chain: chain, address: address, favorite: false, note: '' };
+    }
+
+    async function postLocal(url, body) {
+      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(t('settingsFailed'));
+      return result;
+    }
+
+    async function saveAnnotation(chain, address, favorite, note) {
+      await postLocal('/api/annotation', { chain: chain, address: address, favorite: favorite, note: note });
+      await refresh();
+      showToast(t('settingsSaved'));
+    }
+
+    function openNote(chain, address) {
+      noteTarget = { chain: chain, address: address };
+      byId('noteAddress').textContent = chain.toUpperCase() + ' · ' + address;
+      byId('noteInput').value = annotationFor(chain, address).note;
+      byId('noteDialog').showModal();
+    }
+
+    function desktopAlert(key, title, detail, at) {
+      if (!alertsEnabled || at < alertsSince || !window.Notification || Notification.permission !== 'granted') return;
+      const delivered = readStorage('memeRadarDeliveredAlertsV1', {});
+      if (delivered[key]) return;
+      delivered[key] = Date.now();
+      const bounded = Object.fromEntries(Object.entries(delivered).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 500));
+      writeStorage('memeRadarDeliveredAlertsV1', bounded);
+      try { new Notification(title, { body: detail, tag: key, silent: true }); } catch {}
+    }
+
+    function renderManagement(data) {
+      const scheduler = data.scheduler || {};
+      const enabled = scheduler.enabledChains || [activeChain(data)];
+      if (!selectedChainsDirty) byId('scanSelection').innerHTML = chainCatalog.map(function (chain) {
+        const coverage = data.coverage && data.coverage[chain.id];
+        const covered = coverage && coverage.goPlus && coverage.dexScreener;
+        return '<label><input type="checkbox" value="' + chain.id + '" ' + (enabled.includes(chain.id) ? 'checked' : '') + '>'
+          + escapeHtml(chainLabel(chain)) + '<span class="muted"> · ' + escapeHtml(t(covered ? 'coverageDual' : 'coverageSingle')) + '</span></label>';
+      }).join('');
+      byId('schedulerDetail').textContent = t('schedulerSummary', { chains: enabled.join(' / '), current: scheduler.scanningChain || activeChain(data) });
+      byId('notificationButton').textContent = t(alertsEnabled ? 'muteAlerts' : 'enableAlerts');
+      byId('savedNotes').innerHTML = Object.values(data.annotations || {}).map(function (row) {
+        return '<div class="saved-row"><strong>' + escapeHtml(row.chain.toUpperCase()) + ' · ' + escapeHtml(row.address) + '</strong><div>' + escapeHtml(row.note || '')
+          + '</div><div class="manage-actions"><button class="mini-button" data-saved-action="favorite" data-chain="' + escapeHtml(row.chain) + '" data-address="' + encodeURIComponent(row.address) + '">'
+          + escapeHtml(t(row.favorite ? 'unfavorite' : 'favorite')) + '</button><button class="mini-button" data-saved-action="note" data-chain="' + escapeHtml(row.chain) + '" data-address="' + encodeURIComponent(row.address) + '">' + escapeHtml(t('editNote')) + '</button></div></div>';
+      }).join('') || '<span class="muted">' + escapeHtml(t('none')) + '</span>';
+      const alerts = (data.events || []).filter(function (event) { return ['CANDIDATE_NEW','RISK_WORSENED'].includes(event.type) && Date.now() - event.at < 30 * 60000; });
+      byId('importantAlerts').innerHTML = alerts.slice(0, 3).map(function (event) {
+        return '<div class="event"><time>' + escapeHtml(formatClock(event.at)) + '</time><span>' + escapeHtml(event.chain.toUpperCase() + ' · ' + eventText(event.message)) + '</span></div>';
+      }).join('');
+      alerts.forEach(function (event) {
+        desktopAlert(event.chain + ':' + event.type + ':' + event.at, t(event.type === 'CANDIDATE_NEW' ? 'newCandidateAlert' : 'riskAlert'), event.message, event.at);
+      });
+      const lastSuccess = scheduler.lastSuccessAt || data.lastSuccessAt;
+      if (lastSuccess && Date.now() - lastSuccess > 10 * 60000 && data.gmgnConnection && data.gmgnConnection.configured) {
+        desktopAlert('scanner-stale:' + lastSuccess, t('failureAlert'), t('appTitle'), Date.now());
+      }
+    }
+
+    function mergedPolicy(data) {
+      const policy = data && data.policy ? data.policy : {};
+      return Object.assign({}, defaultPolicy, policy, {
+        scanIntervalMs: number(policy.scanIntervalMs, defaultPolicy.scanIntervalMs)
+      });
+    }
+
+    function candidateAuditAge(row, now) {
+      return row && row.auditedAt ? Math.max(0, (now || Date.now()) - Number(row.auditedAt)) : Number.POSITIVE_INFINITY;
+    }
+
+    function candidateFreshness(row, now) {
+      const age = candidateAuditAge(row, now);
+      if (!Number.isFinite(age)) return { className: 'expired', label: t('noAuditTime'), tone: 'bad' };
+      if (age <= 5 * 60000) return { className: '', label: t('auditedAgo', { time: relativeTime(row.auditedAt, now) }), tone: 'good' };
+      if (age <= 10 * 60000) return { className: 'stale', label: t('auditRefresh', { time: relativeTime(row.auditedAt, now) }), tone: 'warn' };
+      return { className: 'expired', label: t('auditStale', { time: relativeTime(row.auditedAt, now) }), tone: 'bad' };
+    }
+
+    function checkLine(ok, label, waiting) {
+      const tone = ok ? 'good' : waiting ? 'warn' : 'bad';
+      const symbol = ok ? '✓ ' : waiting ? '↻ ' : '× ';
+      return '<span class="' + tone + '">' + symbol + escapeHtml(label) + '</span>';
+    }
+
+    function failureReasons(row, policy) {
+      const deep = row.deep || {};
+      const security = deep.security || {};
+      const wallets = deep.wallets || {};
+      const observation = deep.observation || {};
+      const sellability = deep.sellability || {};
+      const earlyExit = row.auditHealth && row.auditHealth.earlyExit;
+      const failed = (Array.isArray(deep.failed) ? deep.failed : []).filter(function (code) {
+        return !earlyExit || !['wallets', 'observation'].includes(code);
+      });
+      const reasons = [];
+      const add = function (text) { if (text && !reasons.includes(text)) reasons.push(text); };
+      if (earlyExit) add(t('skippedAfterReject'));
+      const rowChain = String(row.chain || activeChain(lastData)).toLowerCase();
+      if (currentLocale !== 'zh-CN') {
+        const localizedChecks = {
+          openSource: 'openSource', ownerRenounced: rowChain === 'sol' ? 'permissionSol' : 'permissionEvm',
+          lpLocked: 'lpLocked', notHoneypot: 'thHoneypot', tax: 'taxLabel', rug: 'rugLabel',
+          concentration: 'top10Label', dev: 'thContract', insider: 'thRisk', bundler: 'thRisk',
+          sniper: 'thRisk', wash: 'thRisk', liquidity: 'liquidity', wallets: 'thOrdinary', observation: 'thPrice'
+        };
+        if (row.auditError) add(t('auditRequestFailed'));
+        if (backendDisposition(row) === 'waiting') add(t('incompleteEvidence'));
+        const secondary = row.secondary || {};
+        if (Array.isArray(secondary.conflicts) && secondary.conflicts.length) add(t('sourceConflict'));
+        failed.forEach(function (code) {
+          const labelKey = localizedChecks[code];
+          add(t('checkFailed', { check: labelKey ? t(labelKey, { value: t('unknown'), buy: t('unknown'), sell: t('unknown') }) : String(code) }));
+        });
+        if (!reasons.length) add(backendDisposition(row) === 'waiting' ? t('noReasonWaiting') : deep.chainPass ? t('chainPassNextX') : t('noFailureDetail'));
+        return reasons;
+      }
+      if (row.auditError) add('深度审计请求暂时失败，系统已安排自动复查');
+      const unknownCount = Array.isArray(deep.blockingUnknownFields) ? deep.blockingUnknownFields.length
+        : Array.isArray(deep.unknownFields) ? deep.unknownFields.length : 0;
+      if (backendDisposition(row) === 'waiting' && unknownCount > 0) add('有' + unknownCount + '项必要证据暂未返回，未知值不会按安全处理');
+      const secondary = row.secondary || {};
+      const secondarySources = secondary.sources || {};
+      const secondaryCovered = Object.values(secondarySources).some(function (source) { return source && source.status !== 'UNSUPPORTED'; });
+      if (row.decisionReason) add(safeMessage(row.decisionReason, '第二数据源状态已更新'));
+      if (secondary.security && Array.isArray(secondary.security.fatal)) {
+        secondary.security.fatal.forEach(function (risk) { add('GoPlus一票否决：' + safeMessage(risk.reason, risk.field || '发现致命合约风险')); });
+      }
+      if (Array.isArray(secondary.conflicts)) secondary.conflicts.forEach(function (conflict) {
+        if (conflict.type === 'MARKET_MISMATCH') add('多源数据冲突：GMGN与DexScreener的' + safeMessage(conflict.field, '市场数据') + '差异过大，等待重查');
+        else if (conflict.type === 'SECURITY_MISMATCH') add('多源数据冲突：GMGN与GoPlus的' + safeMessage(conflict.field, '安全字段') + '结论冲突，等待重查');
+        else if (conflict.type === 'WEBSITE_MISMATCH') add('不同数据源给出的官网域名不同，请人工辨别');
+      });
+      if (secondaryCovered && secondary.status === 'DEGRADED') add('GoPlus或DexScreener证据不完整，未知值不会按安全处理');
+
+      failed.forEach(function (code) {
+        if (code === 'openSource') add('合约源码未验证，要求必须开源');
+        else if (code === 'ownerRenounced') add(rowChain === 'sol' ? 'Solana铸币或冻结权限未确认撤销' : '所有权未确认放弃');
+        else if (code === 'lpLocked') add('LP锁仓为' + formatPercent(security.lockRate) + '，要求至少' + formatPercent(policy.minLpLockedRate));
+        else if (code === 'notHoneypot') add('未取得可靠卖出证据；不同卖家' + formatCount(sellability.distinctSellers) + '个，要求至少5个');
+        else if (code === 'tax') add('买税/卖税为' + formatPercent(security.buyTax) + '/' + formatPercent(security.sellTax) + '，要求均不超过5.0%');
+        else if (code === 'rug') add('跑路风险为' + formatPercent(security.rugRatio) + '，要求不超过' + formatPercent(policy.maxRugRatio));
+        else if (code === 'concentration') add('前10大地址持仓为' + formatPercent(security.top10) + '，要求不超过' + formatPercent(policy.maxTop10Rate));
+        else if (code === 'dev') add('开发者权限或持仓未通过，当前公开摘要没有更详细数值');
+        else if (code === 'insider') add('内幕钱包持仓为' + formatPercent(security.insider) + '，要求不超过' + formatPercent(policy.maxInsiderRate));
+        else if (code === 'bundler') add('捆绑交易持仓为' + formatPercent(security.bundler) + '，要求不超过' + formatPercent(policy.maxBundlerRate));
+        else if (code === 'sniper') add('狙击钱包持仓为' + formatPercent(security.sniperHold) + '，要求不超过' + formatPercent(policy.maxSniperHoldRate));
+        else if (code === 'wash') add('刷量字段未明确通过');
+        else if (code === 'liquidity') add('流动性为' + formatMoney(security.liquidity) + '，要求至少' + formatMoney(policy.strictLiquidity));
+        else if (code === 'wallets') {
+          const ordinaryKnown = hasFiniteValue(wallets.ordinaryCount);
+          const botKnown = hasFiniteValue(wallets.botHoldRate);
+          const linkedKnown = hasFiniteValue(wallets.linkedHoldRate);
+          if (!ordinaryKnown) add('普通钱包代理数量未知，要求至少' + policy.minOrdinaryWallets + '个');
+          else if (Number(wallets.ordinaryCount) < policy.minOrdinaryWallets) add('普通钱包代理' + formatCount(wallets.ordinaryCount) + '个，要求至少' + policy.minOrdinaryWallets + '个');
+          if (!botKnown) add('机器人持仓比例未知，不按安全处理');
+          else if (Number(wallets.botHoldRate) > policy.maxBotHoldRate) add('机器人持仓' + formatPercent(wallets.botHoldRate) + '，要求不超过' + formatPercent(policy.maxBotHoldRate));
+          if (!linkedKnown) add('同源资金持仓比例未知，不按安全处理');
+          else if (Number(wallets.linkedHoldRate) > policy.maxLinkedHoldRate) add('同源资金持仓' + formatPercent(wallets.linkedHoldRate) + '，要求不超过' + formatPercent(policy.maxLinkedHoldRate));
+          if (ordinaryKnown && botKnown && linkedKnown && Number(wallets.ordinaryCount) >= policy.minOrdinaryWallets && Number(wallets.botHoldRate) <= policy.maxBotHoldRate && Number(wallets.linkedHoldRate) <= policy.maxLinkedHoldRate) add('普通钱包综合检查未通过');
+        } else if (code === 'observation') {
+          add(safeMessage(observation.reason, '5分钟盘面观察未通过') + '；5分钟涨跌' + formatPercent(observation.return5m) + '，最大回撤' + formatPercent(observation.maxDrawdown) + '，单根量能占比' + formatPercent(observation.volumeConcentration));
+        } else add('存在尚未中文化的审计项，请在GMGN详情中复核');
+      });
+
+      if (!reasons.length) add(backendDisposition(row) === 'waiting'
+        ? '深度审计数据暂时不完整，正在等待下一轮复查'
+        : deep.chainPass ? '链上硬门全部通过，下一步请人工检查X社区' : '没有可解释的失败明细，请在GMGN详情中复核');
+      return reasons;
+    }
+
+    function addressIdentity(address) {
+      const value = String(address || '').trim();
+      return /^0x[0-9a-f]{40}$/i.test(value) ? value.toLowerCase() : value;
+    }
+
+    function markFor(address) {
+      const normalized = addressIdentity(address);
+      const chainKey = activeChain(lastData) + ':' + normalized;
+      return manualMarks[chainKey] || (activeChain(lastData) === 'robinhood' ? manualMarks[normalized] : null) || null;
+    }
+
+    function backendDisposition(row) {
+      if (row.status === 'X_REVIEW' || row.status === 'QUALIFIED') return 'chain';
+      if (row.status === 'WAIT_RECHECK') return 'waiting';
+      if (row.status === 'HARD_REJECT' || row.status === 'REJECTED') return 'rejected';
+      if (row.deep && row.deep.chainPass) return 'chain';
+      return 'rejected';
+    }
+
+    function effectiveStatus(row) {
+      const mark = markFor(row.address);
+      if (mark && mark.decision === 'ignored') return 'ignored';
+      if (mark && mark.decision === 'passed' && mark.reviewRevision && mark.reviewRevision === row.reviewRevision
+        && Date.now() - mark.at < 24 * 60 * 60000 && backendDisposition(row) === 'chain' && candidateAuditAge(row) <= 10 * 60000) return 'passed';
+      return backendDisposition(row);
+    }
+
+    function statusBadge(row) {
+      const mark = markFor(row.address);
+      const status = effectiveStatus(row);
+      if (status === 'passed') return '<span class="pill pass">' + escapeHtml(t('manualApproved')) + '</span>';
+      if (status === 'ignored') return '<span class="pill ignore">' + escapeHtml(t('ignored')) + '</span>';
+      if (mark && mark.decision === 'passed' && status !== 'passed') return '<span class="pill expired">' + escapeHtml(t('manualExpired')) + '</span>';
+      if (status === 'chain') return '<span class="pill review">' + escapeHtml(t('statusChain')) + '</span>';
+      if (status === 'waiting') return '<span class="pill review">' + escapeHtml(t('statusWaiting')) + '</span>';
+      return '<span class="pill reject">' + escapeHtml(t('statusRejected')) + '</span>';
+    }
+
+    function rowMatches(row, query, filter, now) {
+      const searchable = [row.symbol, row.name, row.address].join(' ').toLowerCase();
+      if (query && !searchable.includes(query)) return false;
+      const status = effectiveStatus(row);
+      if (filter === 'chain' && status !== 'chain') return false;
+      if (filter === 'waiting' && status !== 'waiting') return false;
+      if (filter === 'passed' && status !== 'passed') return false;
+      if (filter === 'ignored' && status !== 'ignored') return false;
+      if (filter === 'rejected' && status !== 'rejected') return false;
+      if (filter === 'fresh' && candidateAuditAge(row, now) > 5 * 60000) return false;
+      if (filter === 'favorite' && !annotationFor(row.chain || activeChain(lastData), row.address).favorite) return false;
+      return true;
+    }
+
+    function sortRows(rows, sortValue) {
+      return rows.sort(function (a, b) {
+        if (sortValue === 'score_desc') return number(b.discoveryScore) - number(a.discoveryScore);
+        if (sortValue === 'market_desc') return number(b.marketCap) - number(a.marketCap);
+        if (sortValue === 'market_asc') return number(a.marketCap) - number(b.marketCap);
+        if (sortValue === 'liquidity_desc') return number(b.deep && b.deep.security && b.deep.security.liquidity, number(b.liquidity)) - number(a.deep && a.deep.security && a.deep.security.liquidity, number(a.liquidity));
+        return number(b.auditedAt) - number(a.auditedAt);
+      });
+    }
+
+    const reservedXPaths = new Set([
+      'home', 'explore', 'search', 'intent', 'share', 'i', 'messages',
+      'notifications', 'settings', 'compose', 'login', 'signup', 'hashtag'
+    ]);
+
+    function normalizeXHandle(value) {
+      let input = String(value || '').trim();
+      if (!input) return '';
+      try {
+        const isXDomain = /^(?:www\.)?(?:twitter|x)\.com(?:\/|$)/i.test(input);
+        const isAbsoluteUrl = /^https?:\/\//i.test(input);
+        if (isXDomain || isAbsoluteUrl) {
+          const url = new URL(isAbsoluteUrl ? input : 'https://' + input);
+          const host = url.hostname.toLowerCase().replace(/^www\./, '');
+          if (host !== 'x.com' && host !== 'twitter.com') return '';
+          input = url.pathname.split('/').filter(Boolean)[0] || '';
+        } else {
+          input = input.replace(/^@/, '').split(/[/?#]/)[0];
+        }
+      } catch {
+        return '';
+      }
+      input = input.replace(/^@/, '').trim();
+      return /^[A-Za-z0-9_]{1,15}$/.test(input) && !reservedXPaths.has(input.toLowerCase()) ? input : '';
+    }
+
+    function officialXHandle(row) {
+      const values = [row.info && row.info.twitter, row.social && row.social.twitter, row.twitter];
+      for (const value of values) {
+        const handle = normalizeXHandle(value);
+        if (handle) return handle;
+      }
+      return '';
+    }
+
+    function actionLinks(row) {
+      const address = String(row.address || '');
+      const encodedAddress = encodeURIComponent(address);
+      const encodedData = encodeURIComponent(address);
+      const symbol = String(row.symbol || '');
+      const rowChain = String(row.chain || activeChain(lastData)).toLowerCase();
+      const gmgnUrl = safeUrl(row.gmgnUrl) || 'https://gmgn.ai/' + encodeURIComponent(rowChain) + '/token/' + encodedAddress;
+      const twitter = officialXHandle(row);
+      const officialX = twitter ? 'https://x.com/' + encodeURIComponent(twitter) : '';
+      const searchX = 'https://x.com/search?q=' + encodeURIComponent(address + ' OR $' + symbol) + '&src=typed_query&f=live';
+      const website = safeUrl(row.info && row.info.website);
+      let result = '<div class="links">';
+      result += '<button class="mini-button" type="button" data-action="copy" data-address="' + encodedData + '">' + escapeHtml(t('copyContract')) + '</button>';
+      result += '<a href="' + escapeHtml(gmgnUrl) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('gmgnDetails')) + '</a>';
+      if (officialX) result += '<a href="' + escapeHtml(officialX) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('officialX')) + '</a>';
+      result += '<a href="' + escapeHtml(searchX) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('liveXSearch')) + '</a>';
+      if (website) result += '<a href="' + escapeHtml(website) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(t('visitWebsite')) + '</a>';
+      else result += '<span class="missing-link">' + escapeHtml(t('noWebsite')) + '</span>';
+      result += '</div>';
+      return result;
+    }
+
+    function candidateRow(row, policy, now) {
+      const earlyExit = row.auditHealth && row.auditHealth.earlyExit;
+      const skipped = '<span class="muted">' + escapeHtml(t('skippedAfterReject')) + '</span>';
+      const deep = row.deep || {};
+      const checks = deep.checks || {};
+      const security = deep.security || {};
+      const wallets = deep.wallets || {};
+      const observation = deep.observation || {};
+      const secondary = row.secondary || {};
+      const secondaryMarket = secondary.market || {};
+      const secondarySecurity = secondary.security || {};
+      const secondarySources = secondary.sources || {};
+      const freshness = candidateFreshness(row, now);
+      const waitingForRecheck = backendDisposition(row) === 'waiting';
+      const address = String(row.address || '');
+      const encodedAddress = encodeURIComponent(address);
+      const mark = markFor(address);
+      const canPass = backendDisposition(row) === 'chain' && candidateAuditAge(row, now) <= 10 * 60000 || Boolean(mark && mark.decision === 'passed');
+      const reasons = failureReasons(row, policy).map(function (reason) {
+        return '<div class="reason">' + escapeHtml(reason) + '</div>';
+      }).join('');
+      const officialStatus = officialXHandle(row) ? t('officialXFound') : t('officialXMissing');
+      const hasAge = hasFiniteValue(row.ageSec);
+      const currentAgeSeconds = hasAge ? Number(row.ageSec) + Math.max(0, (now - number(row.auditedAt, now)) / 1000) : null;
+      const ageLabel = !hasAge ? t('unknown') : currentAgeSeconds < 3600
+        ? t('minutesValue', { n: Math.max(0, Math.round(currentAgeSeconds / 60)).toLocaleString(currentLocale) })
+        : t('hoursValue', { n: new Intl.NumberFormat(currentLocale, { maximumFractionDigits: 1 }).format(currentAgeSeconds / 3600) });
+      const passActive = mark && mark.decision === 'passed';
+      const ignoreActive = mark && mark.decision === 'ignored';
+      const permissionLabel = String(row.chain || activeChain(lastData)).toLowerCase() === 'sol' ? t('permissionSol') : t('permissionEvm');
+      const passDisabledReason = backendDisposition(row) !== 'chain' ? t('cannotPassGate') : t('cannotPassStale');
+      const dexStatus = secondarySources.dexScreener && secondarySources.dexScreener.status;
+      const goPlusStatus = secondarySources.goPlus && secondarySources.goPlus.status;
+      const dexLabel = earlyExit ? t('skippedAfterReject') : dexStatus === 'OK'
+        ? t('dexReview', { mc: formatMoney(secondaryMarket.marketCap), lp: formatMoney(secondaryMarket.liquidityUsd) })
+        : dexStatus === 'UNSUPPORTED' ? t('dexUnsupported') : t('dexPending');
+      const goPlusLabel = earlyExit ? t('skippedAfterReject') : secondarySecurity.verdict === 'FATAL'
+        ? t('goPlusFatal')
+        : secondarySecurity.verdict === 'NO_FATAL_FLAGS' ? t('goPlusClear')
+          : goPlusStatus === 'UNSUPPORTED' ? t('goPlusUnsupported') : t('goPlusPending');
+      const goPlusTone = secondarySecurity.verdict === 'FATAL' ? 'bad' : secondarySecurity.verdict === 'NO_FATAL_FLAGS' ? 'good' : 'warn';
+
+      return '<tr class="' + freshness.className + '">' +
+        '<td><span class="symbol">' + escapeHtml(row.symbol || '?') + '</span><div>' + escapeHtml(row.name || '') + '</div><div class="addr mono">' + escapeHtml(address.slice(0, 8)) + '…' + escapeHtml(address.slice(-6)) + '</div>' + actionLinks(row) + '</td>' +
+        '<td class="mono">' + formatMoney(row.marketCap) + '<br><span class="muted">' + escapeHtml(t('liquidity', { value: formatMoney(security.liquidity !== undefined ? security.liquidity : row.liquidity) })) + '</span><br><span class="' + (dexStatus === 'OK' ? 'good' : 'warn') + '">' + escapeHtml(dexLabel) + '</span></td>' +
+        '<td>' + escapeHtml(ageLabel) + '<div class="audit-age ' + freshness.tone + '">' + escapeHtml(freshness.label) + '</div></td>' +
+        '<td class="stack">' + checkLine(checks.openSource, t('openSource'), waitingForRecheck) + checkLine(checks.ownerRenounced, permissionLabel, waitingForRecheck) + '<span class="' + goPlusTone + '">' + escapeHtml(goPlusLabel) + '</span></td>' +
+        '<td>' + checkLine(checks.lpLocked, security.lpBurned ? t('lpBurned') : t('lpLocked', { value: formatPercent(security.lockRate) }), waitingForRecheck) + '</td>' +
+        '<td class="' + (checks.notHoneypot ? 'good' : waitingForRecheck ? 'warn' : 'bad') + '">' + escapeHtml(deep.honeypotEvidence || t('unknown')) + '<br><span class="muted">' + escapeHtml(earlyExit ? t('skippedAfterReject') : t('distinctSellers', { n: formatCount(deep.sellability && deep.sellability.distinctSellers) })) + '</span></td>' +
+        '<td class="stack">' + checkLine(checks.tax, t('taxLabel', { buy: formatPercent(security.buyTax), sell: formatPercent(security.sellTax) }), waitingForRecheck) + checkLine(checks.rug, t('rugLabel', { value: formatPercent(security.rugRatio) }), waitingForRecheck) + checkLine(checks.concentration, t('top10Label', { value: formatPercent(security.top10) }), waitingForRecheck) + '</td>' +
+        '<td class="stack">' + (earlyExit ? skipped : checkLine(hasFiniteValue(wallets.ordinaryCount) && Number(wallets.ordinaryCount) >= policy.minOrdinaryWallets, t('ordinaryWallets', { ordinary: formatCount(wallets.ordinaryCount), sampled: formatCount(wallets.sampled) }), waitingForRecheck || !hasFiniteValue(wallets.ordinaryCount)) + '<span class="muted">' + escapeHtml(t('ordinaryHold', { value: formatPercent(wallets.ordinaryHoldRate) })) + '</span>') + '</td>' +
+        '<td class="stack">' + (earlyExit ? skipped : checkLine(knownAtMost(wallets.botHoldRate, policy.maxBotHoldRate), t('botsLabel', { value: formatPercent(wallets.botHoldRate) }), waitingForRecheck) + checkLine(knownAtMost(wallets.linkedHoldRate, policy.maxLinkedHoldRate), t('linkedLabel', { value: formatPercent(wallets.linkedHoldRate) }), waitingForRecheck)) + '</td>' +
+        '<td class="' + (observation.pass ? 'good' : 'bad') + '">' + (earlyExit ? skipped : escapeHtml(safeMessage(observation.reason, t('marketUnknown'))) + '<br><span class="muted">' + escapeHtml(t('return5m', { value: formatPercent(observation.return5m) })) + '<br>' + escapeHtml(t('maxDrawdown', { value: formatPercent(observation.maxDrawdown) })) + '</span>') + '</td>' +
+        '<td><span class="warn">' + escapeHtml(t('manualReview')) + '</span><br><span class="muted">' + escapeHtml(officialStatus) + '</span></td>' +
+        '<td>' + statusBadge(row) + '<div class="reasons">' + reasons + '</div><div class="review-actions">' +
+          '<button type="button" class="mini-button pass ' + (passActive ? 'active' : '') + '" data-action="pass" data-address="' + encodedAddress + '" ' + (canPass ? '' : 'disabled title="' + escapeHtml(passDisabledReason) + '"') + '>' + escapeHtml(passActive ? t('cancelPass') : t('manualPass')) + '</button>' +
+          '<button type="button" class="mini-button ignore ' + (ignoreActive ? 'active' : '') + '" data-action="ignore" data-address="' + encodedAddress + '">' + escapeHtml(ignoreActive ? t('cancelIgnore') : t('ignoreAction')) + '</button>' +
+          '<button type="button" class="mini-button" data-action="favorite" data-address="' + encodedAddress + '">' + escapeHtml(t(annotationFor(row.chain || activeChain(lastData), row.address).favorite ? 'unfavorite' : 'favorite')) + '</button>' +
+          '<button type="button" class="mini-button" data-action="note" data-address="' + encodedAddress + '">' + escapeHtml(t('editNote')) + '</button>' +
+        '</div></td>' +
+      '</tr>';
+    }
+
+    function renderCandidates() {
+      const now = Date.now();
+      const query = byId('searchInput').value.trim().toLowerCase();
+      const filter = byId('filterSelect').value;
+      const sortValue = byId('sortSelect').value;
+      const policy = mergedPolicy(lastData || {});
+      const rows = sortRows(rowsCache.filter(function (row) {
+        return rowMatches(row, query, filter, now);
+      }), sortValue);
+      const queue = lastData && lastData.auditQueueStats ? lastData.auditQueueStats : {};
+      const queueTotal = queue.queued !== undefined ? number(queue.queued) : number(queue.total);
+      const queueText = queue.queued !== undefined || queue.total !== undefined || queue.due !== undefined
+        ? t('summaryQueue', { total: formatCount(queueTotal), due: formatCount(number(queue.due)) })
+        : '';
+      byId('resultSummary').textContent = t('resultSummary', { shown: formatCount(rows.length), total: formatCount(rowsCache.length), queue: queueText });
+
+      if (!rows.length) {
+        byId('candidates').innerHTML = '<div class="empty">' + escapeHtml(t('noFilteredRows')) + '</div>';
+        return;
+      }
+
+      const body = rows.map(function (row) { return candidateRow(row, policy, now); }).join('');
+      byId('candidates').innerHTML =
+        '<div class="table"><table><thead><tr>' +
+        '<th>' + escapeHtml(t('thToken')) + '</th><th>' + escapeHtml(t('thMarket')) + '</th><th>' + escapeHtml(t('thAge')) + '</th><th>' + escapeHtml(t('thContract')) + '</th><th>' + escapeHtml(t('thLp')) + '</th><th>' + escapeHtml(t('thHoneypot')) + '</th><th>' + escapeHtml(t('thRisk')) + '</th><th>' + escapeHtml(t('thOrdinary')) + '</th><th>' + escapeHtml(t('thBots')) + '</th><th>' + escapeHtml(t('thPrice')) + '</th><th>' + escapeHtml(t('thX')) + '</th><th>' + escapeHtml(t('thConclusion')) + '</th>' +
+        '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    }
+
+    function activeChain(data) {
+      return String((data && (data.activeChain || (data.policy && data.policy.chain))) || 'robinhood').toLowerCase();
+    }
+
+    function renderChainSwitcher(data) {
+      const hasStatus = Boolean(data);
+      const current = activeChain(data);
+      const pending = String((data && data.pendingChain) || '').toLowerCase();
+      const declared = Array.isArray(data && data.supportedChains) ? data.supportedChains.map(function (value) {
+        return String(value).toLowerCase();
+      }) : [];
+      const available = new Set(hasStatus ? (declared.length ? declared : [current]) : []);
+      byId('chainSwitcher').innerHTML = chainCatalog.map(function (chain) {
+        const isActive = chain.id === current;
+        const supported = available.has(chain.id);
+        return '<button type="button" class="chain-button ' + (isActive ? 'active ' : '') + ((chainSwitching && isActive) || pending === chain.id ? 'switching' : '') + '" data-chain="' + chain.id + '" ' + ((!supported || chainSwitching || Boolean(pending)) ? 'disabled' : '') + '>' + escapeHtml(chainLabel(chain)) + '</button>';
+      }).join('');
+      const activeItem = chainCatalog.find(function (chain) { return chain.id === current; });
+      const pendingItem = chainCatalog.find(function (chain) { return chain.id === pending; });
+      const activeLabel = activeItem ? chainLabel(activeItem) : current;
+      const pendingLabel = pendingItem ? chainLabel(pendingItem) : pending;
+      byId('chainHint').textContent = !hasStatus ? t('chainOfflineHint') : pending
+        ? t('chainPendingHint', { current: activeLabel, pending: pendingLabel })
+        : declared.length ? t('chainClickHint', { chain: activeLabel }) : t('chainUnavailableHint', { chain: activeLabel });
+    }
+
+    async function switchActiveChain(chain) {
+      if (chainSwitching || !lastData || chain === activeChain(lastData)) return;
+      chainSwitching = true;
+      renderChainSwitcher(lastData);
+      showToast(t('switchingToast'));
+      try {
+        const response = await fetch('/api/active-chain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chain: chain })
+        });
+        let result = {};
+        try { result = await response.json(); } catch {}
+        if (!response.ok || result.accepted !== true) {
+          const errorText = result.error === 'unsupported_chain' ? t('unsupportedChain')
+            : result.error === 'chain_switch_unavailable' ? t('switchUnavailable')
+              : result.error === 'scan_in_progress' ? t('scanBusy')
+                : t('switchFailed');
+          throw new Error(errorText);
+        }
+        showToast(t('switchAccepted'));
+        viewChain = chain;
+        writeStorage('memeRadarViewChainV1', chain);
+        await refresh();
+      } catch (error) {
+        showToast((currentLocale === 'zh-CN' || currentLocale === 'zh-TW') && hasChinese(error.message) ? error.message : t('switchFailed'));
+      } finally {
+        chainSwitching = false;
+        if (lastData) renderChainSwitcher(lastData);
+      }
+    }
+
+    function providerStatus(data) {
+      const health = data.sourceHealth || {};
+      const discovery = health.discovery;
+      const audit = health.lastAudit;
+      const secondary = health.lastSecondary;
+      if (discovery || audit || secondary) {
+        const discoveryEndpoints = discovery ? [discovery.trenches, discovery.trending].filter(Boolean) : [];
+        const auditEndpoints = audit && audit.endpoints ? Object.values(audit.endpoints) : [];
+        const secondaryEndpoints = secondary && secondary.sources ? Object.values(secondary.sources) : [];
+        const secondaryCovered = secondaryEndpoints.filter(function (row) { return row.status !== 'UNSUPPORTED'; });
+        const discoveryOk = discoveryEndpoints.filter(function (row) { return row.ok === true; }).length;
+        const auditOk = auditEndpoints.filter(function (row) { return row.ok === true; }).length;
+        const secondaryOk = secondaryCovered.filter(function (row) { return row.ok === true; }).length;
+        const pieces = [];
+        if (discoveryEndpoints.length) pieces.push(t('providerDiscovery', { ok: discoveryOk, total: discoveryEndpoints.length }));
+        if (auditEndpoints.length) pieces.push(t('providerAudit', { ok: auditOk, total: auditEndpoints.length }));
+        if (secondaryCovered.length) pieces.push(t('providerSecondary', { ok: secondaryOk, total: secondaryCovered.length }));
+        else if (secondaryEndpoints.length) pieces.push(t('gmgnOnly'));
+        const checkedAt = Math.max(number(discovery && discovery.checkedAt), number(audit && audit.checkedAt), number(secondary && secondary.checkedAt));
+        if (checkedAt) pieces.push(t('checkedAgo', { time: relativeTime(checkedAt) }));
+        const incomplete = discovery && discovery.complete === false || audit && audit.complete === false
+          || secondaryCovered.length && secondary && secondary.complete === false;
+        if (incomplete) return { title: t('providerPartial'), detail: pieces.join(' · ') || t('incompleteRound'), tone: 'warn' };
+        return { title: t('providerNormal'), detail: pieces.join(' · ') || t('gmgnNormal'), tone: 'good' };
+      }
+      const source = health.gmgn;
+      if (source) {
+        const status = String(source.status || '').toUpperCase();
+        const sourceTime = source.lastSuccessAt || source.checkedAt;
+        const lastSuccessText = sourceTime ? t('recentCheck', { time: relativeTime(sourceTime) }) : t('noCheck');
+        if (source.complete === false) return { title: t('providerPartial'), detail: lastSuccessText + ' · ' + t('incompleteRound'), tone: 'warn' };
+        if (source.complete === true) return { title: t('providerNormal'), detail: lastSuccessText, tone: 'good' };
+        if (status.includes('PARTIAL')) return { title: t('providerPartial'), detail: lastSuccessText + ' · ' + t('incompleteRound'), tone: 'warn' };
+        if (status.includes('RATE')) return { title: t('statusRateLimited'), detail: source.retryAt ? t('retryAt', { time: formatClock(source.retryAt) }) : t('retryWaiting'), tone: 'warn' };
+        if (status.includes('AUTH')) return { title: t('notAuthorized'), detail: t('configReadOnly'), tone: 'warn' };
+        if (source.available === false || status.includes('ERROR') || status.includes('FAIL')) return { title: t('requestError'), detail: lastSuccessText, tone: 'bad' };
+        if (source.available === true) return { title: t('providerNormal'), detail: lastSuccessText, tone: 'good' };
+      }
+      if (data.status === 'RUNNING') return { title: t('providerNormal'), detail: t('lastRoundSuccess'), tone: 'good' };
+      if (data.status === 'DEGRADED') return { title: t('providerPartial'), detail: t('partialEvidence'), tone: 'warn' };
+      if (data.status === 'SCANNING' || data.status === 'SWITCHING') return { title: t('reading'), detail: t('waitingRound'), tone: 'info' };
+      if (data.status === 'RATE_LIMITED') return { title: t('statusRateLimited'), detail: data.retryAt ? t('retryAt', { time: formatClock(data.retryAt) }) : t('retryWaiting'), tone: 'warn' };
+      if (data.status === 'GMGN_AUTH_REQUIRED') return { title: t('notAuthorized'), detail: t('configReadOnly'), tone: 'warn' };
+      if (data.status === 'STARTING') return { title: t('initializing'), detail: t('waitingFirstScan'), tone: 'warn' };
+      return { title: t('requestError'), detail: safeMessage(data.error, t('waitAutoRetry')), tone: 'bad' };
+    }
+
+    function freshnessStatus(data, now, policy) {
+      if (!data.generatedAt) return { title: t('noData'), detail: t('notCompletedScan'), tone: 'bad' };
+      const age = now - Number(data.generatedAt);
+      const delayedAt = Math.max(policy.scanIntervalMs * 1.5, 180000);
+      const expiredAt = Math.max(policy.scanIntervalMs * 3, 5 * 60000);
+      if (age <= delayedAt) return { title: t('fresh'), detail: relativeTime(data.generatedAt, now), tone: 'good' };
+      if (age <= expiredAt) return { title: t('delayed'), detail: t('waitNewResult', { time: relativeTime(data.generatedAt, now) }), tone: 'warn' };
+      return { title: t('expired'), detail: t('staleWarning', { time: relativeTime(data.generatedAt, now) }), tone: 'bad' };
+    }
+
+    function storedLastSuccess(data) {
+      let value = number(data.lastSuccessAt) || number(readStorage('robinhoodRadarLastSuccessAtV1', 0));
+      const currentSuccess = number(data.lastSuccessAt) || (data.status === 'RUNNING' ? number(data.generatedAt) : 0);
+      if (currentSuccess > value) {
+        value = currentSuccess;
+        writeStorage('robinhoodRadarLastSuccessAtV1', value);
+      }
+      return value;
+    }
+
+    function renderTelemetry() {
+      const now = Date.now();
+      if (!serviceOnline || !lastData) {
+        byId('serviceState').textContent = t('offline');
+        byId('serviceState').className = 'bad';
+        byId('serviceDetail').textContent = t('cannotReadPort');
+        byId('providerState').textContent = t('unknown');
+        byId('providerState').className = 'warn';
+        byId('providerDetail').textContent = t('localOffline');
+        byId('scanProgress').textContent = t('cannotJudge');
+        byId('freshnessState').textContent = t('unavailable');
+        byId('freshnessState').className = 'bad';
+        byId('freshnessDetail').textContent = t('restoreService');
+        return;
+      }
+
+      const data = lastData;
+      const policy = mergedPolicy(data);
+      const provider = providerStatus(data);
+      const lastAttempt = number(data.lastAttemptAt) || number(data.generatedAt);
+      const lastSuccess = storedLastSuccess(data);
+      const freshness = freshnessStatus(Object.assign({}, data, { generatedAt: lastSuccess }), now, policy);
+      const scheduledAt = number(data.nextCycleAt) || (data.retryAt && Number(data.retryAt) > now ? Number(data.retryAt) : lastAttempt + policy.scanIntervalMs);
+      const isExplicitlyScanning = data.scanInProgress === true || data.scanning === true;
+      const mayBeScanning = !isExplicitlyScanning && scheduledAt > 0 && now >= scheduledAt && now - scheduledAt < Math.max(45000, number(data.lastCycleMs) * 2);
+
+      byId('serviceState').textContent = t('online');
+      byId('serviceState').className = 'good';
+      byId('serviceDetail').textContent = t('localReadOnly');
+      byId('providerState').textContent = provider.title;
+      byId('providerState').className = provider.tone;
+      byId('providerDetail').textContent = provider.detail;
+      byId('lastAttempt').textContent = formatClock(lastAttempt);
+      byId('attemptAgo').textContent = relativeTime(lastAttempt, now);
+      byId('lastSuccess').textContent = formatClock(lastSuccess);
+      byId('successAgo').textContent = lastSuccess ? relativeTime(lastSuccess, now) + (data.status === 'RUNNING' ? '' : ' · ' + t('browserRecord')) : t('browserNoSuccess');
+      byId('freshnessState').textContent = freshness.title;
+      byId('freshnessState').className = freshness.tone;
+      byId('freshnessDetail').textContent = freshness.detail;
+
+      if (scheduledAt > now) {
+        byId('nextScan').textContent = t('afterDuration', { time: formatDuration(scheduledAt - now) });
+        byId('scanProgress').textContent = data.status === 'RATE_LIMITED' ? t('waitRateRelease') : t('waitNextSchedule');
+      } else {
+        byId('nextScan').textContent = isExplicitlyScanning ? t('statusScanning') : mayBeScanning ? t('possiblyScanning') : t('waitingNewResult');
+        byId('scanProgress').textContent = isExplicitlyScanning ? t('backendConfirmedScanning') : t('noLiveProgress');
+      }
+
+      byId('fresh').textContent = lastSuccess ? relativeTime(lastSuccess, now) : t('noSuccessfulData');
+      byId('dot').classList.toggle('scanning', isExplicitlyScanning);
+    }
+
+    function renderNotice(data) {
+      const notice = byId('notice');
+      if (data.status === 'GMGN_AUTH_REQUIRED') {
+        notice.className = 'notice';
+        notice.textContent = t('authNotice');
+      } else if (data.status === 'RATE_LIMITED') {
+        notice.className = 'notice';
+        const retryText = data.retryAt ? t('expectedRecovery', { time: formatClock(data.retryAt) }) : '';
+        notice.textContent = t('rateNotice', { retry: retryText });
+      } else if (data.status === 'ERROR' || data.status === 'STATE_ERROR') {
+        notice.className = 'notice bad';
+        notice.textContent = t('scanErrorNotice', { detail: safeMessage(data.error, t('waitAutoRetry')) });
+      } else if (data.status === 'SCANNING') {
+        notice.className = 'notice ok';
+        notice.textContent = t('scanningNotice');
+      } else if (data.status === 'SWITCHING') {
+        notice.className = 'notice';
+        notice.textContent = t('switchingNotice');
+      } else if (data.status === 'DEGRADED') {
+        notice.className = 'notice';
+        notice.textContent = t('degradedNotice');
+      } else if (data.status === 'RUNNING') {
+        const provider = providerStatus(data);
+        const partial = provider.tone !== 'good';
+        notice.className = partial ? 'notice' : 'notice ok';
+        notice.textContent = partial
+          ? t('runningPartialNotice', { detail: provider.detail })
+          : t('runningNotice');
+      } else {
+        notice.className = 'notice';
+        notice.textContent = t('initialNotice');
+      }
+    }
+
+    function eventText(value) {
+      const text = String(value || '');
+      if (/HTTP\s*429|RATE_LIMIT/i.test(text)) return t('eventRateLimited');
+      if (/Command failed/i.test(text)) return t('eventRequestFailed');
+      if (currentLocale !== 'zh-CN' && currentLocale !== 'zh-TW') return safeMessage(text, t('eventChanged'));
+      return safeMessage(text, t('eventChanged'))
+        .replace(/X待人工复核/g, '待人工看X')
+        .replace(/：REJECTED$/, '：已排除')
+        .replace(/：QUALIFIED$/, '：链上候选')
+        .replace(/：X_REVIEW$/, '：待人工看X')
+        .replace(/：HARD_REJECT$/, '：硬门淘汰')
+        .replace(/：WAIT_RECHECK$/, '：等待复查');
+    }
+
+    function renderEvents(data) {
+      const events = Array.isArray(data.events) ? data.events : [];
+      byId('events').innerHTML = events.length ? events.slice(0, 12).map(function (event) {
+        return '<div class="event"><time>' + escapeHtml(formatClock(event.at)) + '</time><span>' + escapeHtml(eventText(event.message)) + '</span></div>';
+      }).join('') : '<div class="empty">' + escapeHtml(t('noEvents')) + '</div>';
+      const attemptAt = number(data.lastAttemptAt) || number(data.generatedAt);
+      byId('cycle').textContent = attemptAt ? t('cycleSummary', { time: formatClock(attemptAt), ms: formatCount(number(data.lastCycleMs)) }) : t('notScanned');
+    }
+
+    function renderOutcomes(data) {
+      const summary = data.outcomeSummary || {};
+      const setReturn = function (id, value) {
+        const element = byId(id);
+        element.textContent = formatSignedPercent(value);
+        element.className = value === undefined || value === null ? 'muted' : Number(value) > 0 ? 'good' : Number(value) < 0 ? 'bad' : '';
+      };
+      byId('outcomeTracked').textContent = number(summary.tracked, number(summary.total)).toLocaleString(currentLocale);
+      setReturn('outcome30m', summary.averageReturn30m);
+      setReturn('outcome1h', summary.averageReturn1h);
+      setReturn('outcome2h', summary.averageReturn2h);
+      setReturn('outcome24h', summary.averageReturn24h);
+      byId('outcome30mCount').textContent = t('completedSamples', { n: formatCount(number(summary.completed30m)) });
+      byId('outcome1hCount').textContent = t('completedSamples', { n: formatCount(number(summary.completed1h)) });
+      byId('outcome2hCount').textContent = t('completedSamples', { n: formatCount(number(summary.completed2h)) });
+      byId('outcome24hCount').textContent = t('completedSamples', { n: formatCount(number(summary.completed24h)) });
+      const readyWindows = [
+        [t('window30m'), number(summary.completed30m)],
+        [t('window2h'), number(summary.completed2h)],
+        [t('window24h'), number(summary.completed24h)]
+      ].filter(function (item) { return item[1] >= 50; }).map(function (item) { return item[0]; });
+      byId('outcomeGate').textContent = readyWindows.length
+        ? t('gateReady', { windows: readyWindows.join(currentLocale === 'zh-CN' || currentLocale === 'zh-TW' ? '、' : ', ') })
+        : t('sampleGate');
+      const coverage = summary.coverage || {};
+      byId('outcomeCoverage').innerHTML = ['passed', 'rejected'].map(function (cohort) {
+        const rows = coverage[cohort] || {};
+        return (cohort === 'rejected' ? '<strong>' + escapeHtml(t('rejectedCohort')) + '</strong>' : '')
+          + ['m30', 'h2', 'h24'].map(function (key) {
+            const row = rows[key] || {};
+            return '<div>' + escapeHtml(t('coverageLine', { window: {m30:t('window30m'),h2:t('window2h'),h24:t('window24h')}[key],
+              eligible: formatCount(row.eligible || 0), completed: formatCount(row.completed || 0), missing: formatCount(row.missing || 0), median: formatSignedPercent(row.median) })) + '</div>';
+          }).join('');
+      }).join('');
+    }
+
+    function renderLive() {
+      const chain = viewChain || activeChain(lastData);
+      const data = liveData && liveData.chain === chain ? liveData : null;
+      const stale = !data || !data.lastSuccessAt || Date.now() - data.lastSuccessAt > 60000;
+      const status = !liveEnabled ? 'livePaused' : liveOffline ? 'localOffline' : data && data.status === 'RATE_LIMITED' ? 'gmgnApiRate'
+        : data && data.status === 'AUTH_REQUIRED' ? 'statusAuth' : data && data.status === 'ERROR' ? 'gmgnApiNetwork'
+          : !data || data.status === 'LOADING' || data.status === 'WAITING' ? 'livePolling' : stale ? 'liveStale' : 'liveReady';
+      byId('liveAuto').checked = liveEnabled;
+      byId('liveState').textContent = t(status);
+      const query = byId('liveSearch').value.trim().toLowerCase(), mode = byId('liveSort').value;
+      let rows = (data && data.rows || []).filter(function (row) {
+        return !query || [row.symbol, row.name, row.address].join(' ').toLowerCase().includes(query);
+      });
+      if (mode === 'new') rows = rows.filter(function (row) { return row.newAt && Date.now() - row.newAt < 10 * 60000; });
+      rows = rows.slice().sort(function (a, b) {
+        return (mode === 'priority' ? Number(b.priorityBand) - Number(a.priorityBand) : mode === 'new' ? b.newAt - a.newAt : 0)
+          || number(b.volume1m) - number(a.volume1m);
+      }).slice(0, 15);
+      byId('liveMeta').textContent = t('liveMeta', { chain: chainLabel(chainCatalog.find(function (item) { return item.id === chain; })),
+        time: data && data.lastSuccessAt ? relativeTime(data.lastSuccessAt) : t('noRecord'), shown: rows.length, total: data && data.rows.length || 0 }) + ' · ' + t('liveLimits');
+      const enabledChains = lastData && lastData.scheduler && lastData.scheduler.enabledChains || [];
+      const fingerprint = JSON.stringify([rows, chain, currentLocale, stale, liveOffline, mode, query, enabledChains, [...liveQueued], Math.floor(Date.now() / 60000)]);
+      if (fingerprint === liveFingerprint) return;
+      liveFingerprint = fingerprint;
+      byId('liveRows').innerHTML = rows.map(function (row) {
+        const isNew = row.newAt && Date.now() - row.newAt < 120000;
+        const audit = row.audit;
+        const auditFresh = audit && Date.now() - audit.at <= 10 * 60000;
+        const decision = audit && ({X_REVIEW:'statusChain', QUALIFIED:'statusChain', HARD_REJECT:'statusRejected', WAIT_RECHECK:'statusWaiting'})[audit.status];
+        const reviewText = audit ? t(decision || 'liveUnreviewed') + ' · ' + relativeTime(audit.at) + (auditFresh ? '' : ' · ' + t('liveStale')) : t('liveUnreviewed');
+        const queued = liveQueued.get(row.chain + ':' + row.address);
+        const isQueued = queued && (!audit || audit.at < queued);
+        const canAudit = !stale && !liveOffline && row.auditEligible && enabledChains.includes(row.chain) && !(audit && audit.status === 'HARD_REJECT');
+        const links = actionLinks({ address:row.address, chain:row.chain, symbol:row.symbol, info:{ website:row.website, twitter:row.twitter } });
+        const unit = function (label, value, tone) { return '<div><small>' + escapeHtml(label) + '</small><b class="mono ' + (tone || '') + '">' + escapeHtml(value) + '</b></div>'; };
+        return '<article class="live-card' + (isNew ? ' new-sighting' : '') + '"><div class="live-card-head"><strong>' + escapeHtml(row.symbol) + '</strong>'
+          + '<span class="live-tag">' + escapeHtml(isNew ? t('liveNew') : '1m') + '</span></div><div class="muted">' + escapeHtml(row.name) + '</div>'
+          + '<div class="addr mono">' + escapeHtml(row.address.slice(0,8) + '…' + row.address.slice(-6)) + '</div>'
+          + '<div class="live-numbers">' + unit('MC / LP', formatMoney(row.marketCap) + ' / ' + formatMoney(row.liquidity))
+          + unit(t('liveVolume'), formatMoney(row.volume1m))
+          + unit(t('liveTrades'), formatCount(row.buys1m) + ' / ' + formatCount(row.sells1m))
+          + unit(t('liveSmart'), formatCount(row.smartMoney) + ' / ' + formatCount(row.holders))
+          + unit(t('liveDelta', {seconds:row.deltaWindowMs ? Math.round(row.deltaWindowMs/1000) : '—'}), formatSignedPercent(row.priceDelta), row.priceDelta > 0 ? 'good' : row.priceDelta < 0 ? 'bad' : '')
+          + unit(t('ageLabel'), formatDuration(Math.max(0, Date.now() - row.createdAt*1000))) + '</div>'
+          + '<div class="live-evidence">' + escapeHtml(reviewText) + '</div>' + links
+          + '<button class="mini-button" type="button" data-live-audit="' + encodeURIComponent(row.address) + '" '
+          + (canAudit && !isQueued ? '' : 'disabled ') + 'title="' + escapeHtml(t('liveAuditScope')) + '">' + escapeHtml(isQueued ? t('liveAuditQueued') : t('liveAudit')) + '</button></article>';
+      }).join('') || '<div class="empty">' + escapeHtml(data && data.lastSuccessAt ? t('liveEmpty') : t(status)) + '</div>';
+    }
+
+    async function refreshLive() {
+      renderLive();
+      if (!liveEnabled || liveBusy || document.hidden || !lastData) return;
+      const chain = viewChain || activeChain(lastData);
+      liveBusy = true;
+      try {
+        const response = await fetch('/api/live-discovery', { method: 'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({chain:chain}), signal:AbortSignal.timeout(8000) });
+        if (!response.ok) throw new Error('live_failed');
+        const data = await response.json();
+        if (chain === (viewChain || activeChain(lastData)) && data.chain === chain) { liveData = data; liveOffline = false; }
+      } catch { liveOffline = true; }
+      finally { liveBusy = false; renderLive(); }
+    }
+
+    function render(data, forceCandidates) {
+      lastData = data;
+      const cutoff = Date.now() - 30 * 60000;
+      const nextRows = Array.isArray(data.candidates) ? data.candidates.filter(function (row) {
+        return number(row.auditedAt) >= cutoff;
+      }) : [];
+      const nextFingerprint = JSON.stringify(nextRows.map(function (row) {
+        const mark = markFor(row.address);
+        return [row.chain, row.address, row.auditedAt, row.status, row.deep && row.deep.chainPass, mark && mark.decision, annotationFor(row.chain || activeChain(data), row.address).updatedAt];
+      }));
+      const shouldRenderCandidates = Boolean(forceCandidates) || nextFingerprint !== rowsFingerprint;
+      rowsFingerprint = nextFingerprint;
+      rowsCache = nextRows;
+      byId('status').textContent = t(statusKeys[data.status] || 'statusUnknown');
+      byId('dot').className = 'dot ' + (data.status || '');
+      byId('scanCount').textContent = number(data.scanCount).toLocaleString(currentLocale);
+      byId('discovered').textContent = number(data.discoveredCount).toLocaleString(currentLocale);
+      byId('prequalified').textContent = number(data.prequalifiedCount).toLocaleString(currentLocale);
+      byId('audited').textContent = rowsCache.length.toLocaleString(currentLocale);
+      const chainCount = rowsCache.filter(function (row) { return backendDisposition(row) === 'chain'; }).length;
+      const waitingCount = rowsCache.filter(function (row) { return backendDisposition(row) === 'waiting'; }).length;
+      const hardRejectCount = rowsCache.filter(function (row) { return backendDisposition(row) === 'rejected'; }).length;
+      const queue = data.auditQueueStats || {};
+      byId('chainCandidates').textContent = chainCount.toLocaleString(currentLocale);
+      byId('manualPassed').textContent = rowsCache.filter(function (row) { return effectiveStatus(row) === 'passed'; }).length.toLocaleString(currentLocale);
+      byId('prequalifiedDetail').textContent = queue.queued !== undefined || queue.total !== undefined
+        ? t('queueDue', { queued: formatCount(queue.queued !== undefined ? number(queue.queued) : number(queue.total)), due: formatCount(number(queue.due)) })
+        : t('awaitingAudit');
+      byId('auditedDetail').textContent = queue.succeeded !== undefined
+        ? t('roundSuccessFail', { succeeded: formatCount(number(queue.succeeded)), failed: formatCount(number(queue.failed)) })
+        : queue.estimatedMinutes !== undefined
+          ? t('queueEstimate', { minutes: formatCount(number(queue.estimatedMinutes)), never: formatCount(number(queue.neverAudited)) })
+          : t('auditSnapshots');
+      byId('chainCandidateDetail').textContent = t('waitingRejectCounts', { waiting: formatCount(waitingCount), rejected: formatCount(hardRejectCount) });
+      byId('manualDetail').textContent = t('localMarkNoTrade');
+      renderNotice(data);
+      renderEvents(data);
+      renderOutcomes(data);
+      renderChainSwitcher(data);
+      renderGmgnConnection(data);
+      renderManagement(data);
+      renderTelemetry();
+      renderLive();
+      if (shouldRenderCandidates) renderCandidates();
+    }
+
+    function showToast(message) {
+      const toast = byId('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 2200);
+    }
+
+    async function copyText(value) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const input = document.createElement('textarea');
+          input.value = value;
+          input.setAttribute('readonly', '');
+          input.style.position = 'fixed';
+          input.style.opacity = '0';
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand('copy');
+          input.remove();
+        }
+        showToast(t('copied'));
+      } catch {
+        showToast(t('copyFailed'));
+      }
+    }
+
+    function updateManualMark(address, decision) {
+      const normalized = addressIdentity(address);
+      const key = activeChain(lastData) + ':' + normalized;
+      const existing = manualMarks[key] || (activeChain(lastData) === 'robinhood' ? manualMarks[normalized] : null);
+      if (existing && existing.decision === decision) delete manualMarks[key];
+      else {
+        const row = rowsCache.find(function (item) { return addressIdentity(item.address) === normalized; });
+        manualMarks[key] = { decision: decision, at: Date.now(), reviewRevision: row && row.reviewRevision || '' };
+      }
+      if (activeChain(lastData) === 'robinhood') delete manualMarks[normalized];
+      writeStorage('robinhoodRadarManualMarksV1', manualMarks);
+      render(lastData, true);
+      showToast(decision === 'passed'
+        ? (existing && existing.decision === decision ? t('undoApprovedToast') : t('approvedToast'))
+        : (existing && existing.decision === decision ? t('undoIgnoredToast') : t('ignoredToast')));
+    }
+
+    async function prepareGmgnOnboarding(regenerate) {
+      const textarea = byId('gmgnPublicKey');
+      const copyButton = byId('copyGmgnPublicKey');
+      const createLink = byId('openGmgnCreate');
+      const status = byId('gmgnOnboardingStatus');
+      textarea.value = '';
+      copyButton.disabled = true;
+      createLink.setAttribute('aria-disabled', 'true');
+      createLink.href = 'https://gmgn.ai/ai/generateapi';
+      status.textContent = t('gmgnOnboardingPreparing');
+      status.className = 'onboarding-status';
+      try {
+        const response = await fetch('/api/gmgn-onboarding', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ regenerate: regenerate === true }), signal: AbortSignal.timeout(15000)
+        });
+        const result = await response.json();
+        const createUrl = safeUrl(result.createUrl);
+        if (!response.ok || result.algorithm !== 'Ed25519'
+          || !String(result.publicKey || '').startsWith('-----BEGIN PUBLIC KEY-----')
+          || !createUrl || new URL(createUrl).hostname !== 'gmgn.ai') throw new Error('invalid_onboarding');
+        textarea.value = result.publicKey;
+        copyButton.disabled = false;
+        createLink.href = createUrl;
+        createLink.setAttribute('aria-disabled', 'false');
+        status.textContent = t('gmgnOnboardingReady');
+      } catch {
+        status.textContent = t('gmgnOnboardingFailed');
+        status.className = 'onboarding-status bad';
+      }
+    }
+
+    let gmgnKeyMessageKey = '';
+    let gmgnKeyMessageError = false;
+    let gmgnRetryUntil = 0;
+    function renderGmgnConnection(data) {
+      const state = data && data.gmgnConnection;
+      const key = gmgnKeyMessageKey || (state && state.status === 'CHECKING' ? 'gmgnApiConnecting'
+        : state && state.status === 'VERIFIED' ? 'gmgnApiVerified'
+          : state && state.configured ? 'gmgnApiConfigured' : 'gmgnApiLocalOnly');
+      byId('gmgnKeyStatus').textContent = t(key);
+      byId('gmgnKeyStatus').className = 'api-key-status' + (gmgnKeyMessageError ? ' bad'
+        : state && state.status === 'VERIFIED' ? ' good' : '');
+    }
+
+    async function connectGmgnApi(event) {
+      event.preventDefault();
+      const input = byId('gmgnKeyInput');
+      const button = byId('gmgnKeyButton');
+      const status = byId('gmgnKeyStatus');
+      const retrySeconds = Math.ceil((gmgnRetryUntil - Date.now()) / 1000);
+      if (retrySeconds > 0) {
+        status.textContent = t('gmgnApiRateCountdown').replace('{seconds}', String(retrySeconds));
+        status.className = 'api-key-status bad';
+        return;
+      }
+      const apiKey = input.value.trim();
+      if (!apiKey) {
+        status.textContent = t('gmgnApiRequired');
+        status.className = 'api-key-status bad';
+        input.focus();
+        return;
+      }
+
+      input.disabled = true;
+      input.value = '';
+      button.disabled = true;
+      gmgnKeyMessageKey = 'gmgnApiConnecting';
+      gmgnKeyMessageError = false;
+      status.textContent = t('gmgnApiConnecting');
+      status.className = 'api-key-status';
+      try {
+        const response = await fetch('/api/gmgn-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: apiKey }),
+          signal: AbortSignal.timeout(60000)
+        });
+        const result = await response.json();
+        if (!response.ok || result.verified !== true) {
+          const errors = {
+            gmgn_auth_failed: 'gmgnApiInvalid', gmgn_permission_denied: 'gmgnApiPermission',
+            gmgn_rate_limited: 'gmgnApiRate', gmgn_check_busy: 'gmgnApiConnecting',
+            gmgn_timeout: 'gmgnApiNetwork', gmgn_network_error: 'gmgnApiNetwork',
+            gmgn_dependency_missing: 'gmgnApiInstall', gmgn_onboarding_required: 'gmgnApiMismatch',
+            gmgn_signing_key_failed: 'gmgnOnboardingFailed'
+          };
+          gmgnKeyMessageKey = errors[result.error] || 'gmgnApiFailed';
+          if (result.error === 'gmgn_rate_limited') {
+            const seconds = Math.max(1, Math.min(300, Number(result.retryAfterSeconds) || 30));
+            gmgnRetryUntil = Date.now() + seconds * 1000;
+          }
+          throw new Error('gmgn_key_failed');
+        }
+        input.value = '';
+        gmgnKeyMessageKey = '';
+        status.textContent = t('gmgnApiConnected');
+        status.className = 'api-key-status good';
+        showToast(t('gmgnApiConnected'));
+        await refresh();
+      } catch {
+        if (!gmgnKeyMessageKey || gmgnKeyMessageKey === 'gmgnApiConnecting') gmgnKeyMessageKey = 'gmgnApiNetwork';
+        gmgnKeyMessageError = true;
+        const seconds = Math.ceil((gmgnRetryUntil - Date.now()) / 1000);
+        status.textContent = gmgnKeyMessageKey === 'gmgnApiRate' && seconds > 0
+          ? t('gmgnApiRateCountdown').replace('{seconds}', String(seconds)) : t(gmgnKeyMessageKey);
+        status.className = 'api-key-status bad';
+        showToast(status.textContent);
+      } finally {
+        input.value = '';
+        input.disabled = false;
+        const remaining = Math.max(0, gmgnRetryUntil - Date.now());
+        button.disabled = remaining > 0;
+        if (remaining > 0) setTimeout(function () { button.disabled = false; }, remaining + 250);
+      }
+    }
+
+    async function refresh() {
+      try {
+        const response = await fetch('/api/status' + (viewChain ? '?chain=' + encodeURIComponent(viewChain) : ''), { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error(t('localOffline'));
+        const data = await response.json();
+        serviceOnline = true;
+        offlineSince = 0;
+        render(data);
+      } catch {
+        if (!offlineSince) offlineSince = Date.now();
+        if (Date.now() - offlineSince > 5 * 60000) desktopAlert('offline:' + offlineSince, t('failureAlert'), t('localOffline'), Date.now());
+        serviceOnline = false;
+        byId('status').textContent = t('localOffline');
+        byId('dot').className = 'dot OFFLINE';
+        byId('fresh').textContent = t('cannotConnect');
+        byId('notice').className = 'notice bad';
+        byId('notice').textContent = t('serviceOfflineNotice');
+        renderChainSwitcher(null);
+        renderTelemetry();
+      }
+    }
+
+    function startParticleField() {
+      const canvas = byId('particleCanvas');
+      const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!canvas || reducedMotion) return;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+      let width = 0;
+      let height = 0;
+      let ratio = 1;
+      let particles = [];
+
+      function resetParticle(particle, initial) {
+        particle.x = Math.random() * width;
+        particle.y = initial ? Math.random() * height : height + 8;
+        particle.radius = .7 + Math.random() * 1.5;
+        particle.speedX = -.08 + Math.random() * .16;
+        particle.speedY = -.12 - Math.random() * .28;
+        particle.alpha = .18 + Math.random() * .46;
+        return particle;
+      }
+
+      function resizeParticles() {
+        ratio = Math.min(2, window.devicePixelRatio || 1);
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = Math.round(width * ratio);
+        canvas.height = Math.round(height * ratio);
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        const targetCount = Math.max(18, Math.min(46, Math.round(width * height / 30000)));
+        particles = Array.from({ length: targetCount }, function (_, index) {
+          return resetParticle(particles[index] || {}, true);
+        });
+      }
+
+      function drawParticles() {
+        context.clearRect(0, 0, width, height);
+        for (let index = 0; index < particles.length; index += 1) {
+          const particle = particles[index];
+          particle.x += particle.speedX;
+          particle.y += particle.speedY;
+          if (particle.y < -10 || particle.x < -10 || particle.x > width + 10) resetParticle(particle, false);
+          context.beginPath();
+          context.fillStyle = 'rgba(92,229,242,' + particle.alpha + ')';
+          context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+          context.fill();
+          for (let otherIndex = index + 1; otherIndex < particles.length; otherIndex += 1) {
+            const other = particles[otherIndex];
+            const distanceX = particle.x - other.x;
+            const distanceY = particle.y - other.y;
+            const distanceSquared = distanceX * distanceX + distanceY * distanceY;
+            if (distanceSquared < 8500) {
+              context.beginPath();
+              context.strokeStyle = 'rgba(67,239,170,' + (.055 * (1 - distanceSquared / 8500)) + ')';
+              context.moveTo(particle.x, particle.y);
+              context.lineTo(other.x, other.y);
+              context.stroke();
+            }
+          }
+        }
+        requestAnimationFrame(drawParticles);
+      }
+
+      resizeParticles();
+      window.addEventListener('resize', resizeParticles, { passive: true });
+      requestAnimationFrame(drawParticles);
+    }
+
+    byId('searchInput').addEventListener('input', renderCandidates);
+    byId('liveSearch').addEventListener('input', renderLive);
+    byId('liveSort').addEventListener('change', renderLive);
+    byId('liveAuto').addEventListener('change', function (event) {
+      liveEnabled = event.target.checked; writeStorage('memeRadarLiveEnabledV1', liveEnabled); refreshLive();
+    });
+    byId('liveRows').addEventListener('click', async function (event) {
+      const copy = event.target.closest('[data-action="copy"]');
+      if (copy) return copyText(decodeURIComponent(copy.dataset.address));
+      const button = event.target.closest('[data-live-audit]');
+      if (!button || button.disabled) return;
+      const chain = viewChain || activeChain(lastData), address = decodeURIComponent(button.dataset.liveAudit);
+      button.disabled = true;
+      try {
+        const response = await fetch('/api/live-review', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({chain:chain,address:address}), signal:AbortSignal.timeout(8000)});
+        const result = await response.json();
+        if (!response.ok || !result.accepted) return showToast(t(result.reason === 'queue_full' ? 'liveQueueFull' : result.reason === 'chain_not_scanning' ? 'liveAuditScope' : 'liveAuditDenied'));
+        liveQueued.set(chain + ':' + address, Date.now());
+        if (liveQueued.size > 100) liveQueued.delete(liveQueued.keys().next().value);
+        showToast(t('liveAuditQueued'));
+      } catch { showToast(t('settingsFailed')); }
+      finally { liveFingerprint = ''; renderLive(); }
+    });
+    byId('filterSelect').addEventListener('change', renderCandidates);
+    byId('sortSelect').addEventListener('change', renderCandidates);
+    byId('gmgnKeyForm').addEventListener('submit', connectGmgnApi);
+    byId('gmgnOnboardingButton').addEventListener('click', function () {
+      byId('gmgnOnboardingDialog').showModal();
+      prepareGmgnOnboarding(false);
+    });
+    byId('copyGmgnPublicKey').addEventListener('click', function () {
+      const value = byId('gmgnPublicKey').value;
+      if (value) { copyText(value); showToast(t('publicKeyCopied')); }
+    });
+    byId('regenerateGmgnPublicKey').addEventListener('click', function () {
+      if (window.confirm(t('regeneratePublicKeyConfirm'))) prepareGmgnOnboarding(true);
+    });
+    byId('closeGmgnOnboarding').addEventListener('click', function () { byId('gmgnOnboardingDialog').close(); });
+    byId('scanSelection').addEventListener('change', function () { selectedChainsDirty = true; });
+    byId('saveChains').addEventListener('click', async function () {
+      const chains = Array.from(byId('scanSelection').querySelectorAll('input:checked')).map(function (input) { return input.value; });
+      if (!chains.length || chains.length > 3) return showToast(t('chainSelectionInvalid'));
+      try {
+        await postLocal('/api/scan-chains', { chains: chains });
+        selectedChainsDirty = false;
+        if (!chains.includes(viewChain)) viewChain = chains[0];
+        await refresh(); showToast(t('settingsSaved'));
+      } catch { showToast(t('settingsFailed')); }
+    });
+    byId('notificationButton').addEventListener('click', async function () {
+      if (alertsEnabled) alertsEnabled = false;
+      else {
+        if (!window.Notification || await Notification.requestPermission() !== 'granted') return showToast(t('notificationUnavailable'));
+        alertsEnabled = true; alertsSince = Date.now();
+        writeStorage('memeRadarAlertsSinceV1', alertsSince);
+      }
+      writeStorage('memeRadarAlertsEnabledV1', alertsEnabled);
+      if (lastData) renderManagement(lastData);
+    });
+    byId('disconnectButton').addEventListener('click', async function () {
+      if (!window.confirm(t('disconnectConfirm'))) return;
+      try { await postLocal('/api/gmgn-disconnect', {}); gmgnKeyMessageKey = ''; gmgnKeyMessageError = false; await refresh(); }
+      catch { showToast(t('settingsFailed')); }
+    });
+    byId('exportButton').addEventListener('click', async function () {
+      try {
+        const response = await fetch('/api/export', { signal: AbortSignal.timeout(15000) });
+        if (!response.ok) throw new Error();
+        const result = await response.json();
+        result.manualMarks = manualMarks;
+        const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a'); link.href = url; link.download = 'meme-radar-records.json';
+        document.body.appendChild(link); link.click(); link.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+      } catch { showToast(t('settingsFailed')); }
+    });
+    byId('cancelNote').addEventListener('click', function () { byId('noteDialog').close(); });
+    byId('saveNote').addEventListener('click', async function () {
+      if (!noteTarget) return;
+      try {
+        const row = annotationFor(noteTarget.chain, noteTarget.address);
+        await saveAnnotation(noteTarget.chain, noteTarget.address, row.favorite, byId('noteInput').value);
+        byId('noteDialog').close();
+      } catch { showToast(t('settingsFailed')); }
+    });
+    byId('savedNotes').addEventListener('click', async function (event) {
+      const button = event.target.closest('[data-saved-action]');
+      if (!button) return;
+      const chain = button.dataset.chain, address = decodeURIComponent(button.dataset.address);
+      const row = annotationFor(chain, address);
+      if (button.dataset.savedAction === 'note') return openNote(chain, address);
+      try { await saveAnnotation(chain, address, !row.favorite, row.note); } catch { showToast(t('settingsFailed')); }
+    });
+    byId('languageSelect').addEventListener('change', function (event) {
+      setLocale(event.target.value, true);
+    });
+    byId('chainSwitcher').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-chain]');
+      if (!button || button.disabled) return;
+      switchActiveChain(button.getAttribute('data-chain'));
+    });
+    byId('candidates').addEventListener('click', async function (event) {
+      const button = event.target.closest('[data-action]');
+      if (!button || button.disabled) return;
+      const address = decodeURIComponent(button.getAttribute('data-address') || '');
+      if (button.dataset.action === 'copy') copyText(address);
+      else if (button.dataset.action === 'pass') updateManualMark(address, 'passed');
+      else if (button.dataset.action === 'ignore') updateManualMark(address, 'ignored');
+      else if (button.dataset.action === 'note') openNote(activeChain(lastData), address);
+      else if (button.dataset.action === 'favorite') {
+        const row = annotationFor(activeChain(lastData), address);
+        try { await saveAnnotation(row.chain, address, !row.favorite, row.note); } catch { showToast(t('settingsFailed')); }
+      }
+    });
+
+    const storedLocale = readStorage('memeRadarLanguageV1', 'zh-CN');
+    setLocale(storedLocale, false);
+    renderChainSwitcher(null);
+    if (location.protocol !== 'file:') {
+      startParticleField();
+      refresh();
+      refreshLive();
+      setInterval(refreshLive, 5000);
+      document.addEventListener('visibilitychange', function () { if (!document.hidden) refreshLive(); });
+      setInterval(refresh, 3000);
+      setInterval(renderTelemetry, 1000);
+      setInterval(renderCandidates, 60000);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+name: Bug 报告
+description: 报告可复现的运行或界面问题，请勿提交 API Key 或私钥
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请先删除截图、日志中的 API Key、个人路径、钱包信息和私人备注。
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Meme雷达版本
+      placeholder: 例如 0.1.6
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 问题与复现步骤
+      description: 说明你做了什么、看到了什么，以及预期结果。
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 已脱敏的诊断信息
+      description: 可选。不要粘贴 API Key、认证密钥或完整状态文件。
