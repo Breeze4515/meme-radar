@@ -3,6 +3,14 @@
   "version": "0.1.6",
   "description": "Open-source edition of a local, read-only multi-chain meme token research radar",
   "author": "DeFi狙击手 (@bi_9527zx)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nhovongoc0-max/meme-radar.git"
+  },
+  "homepage": "https://github.com/nhovongoc0-max/meme-radar#readme",
+  "bugs": {
+    "url": "https://github.com/nhovongoc0-max/meme-radar/issues"
+  },
   "private": true,
   "license": "AGPL-3.0-only",
   "type": "module",

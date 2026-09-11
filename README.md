@@ -8,6 +8,13 @@
 
 它不包含钱包私钥、链上交易签名、swap 或下单模块。系统只提供筛选证据，不构成投资建议，也不保证候选代币安全或上涨。
 
+## 下载
+
+- [Windows x64 一键便携版](https://github.com/nhovongoc0-max/meme-radar/releases/latest/download/MemeRadar-OpenSource-Windows-x64-0.1.6.zip)
+- [macOS 版](https://github.com/nhovongoc0-max/meme-radar/releases/latest/download/MemeRadar-OpenSource-macOS-0.1.6.zip)
+
+也可以在 [Releases](https://github.com/nhovongoc0-max/meme-radar/releases) 页面查看版本说明与文件校验值。
+
 ## 安全边界
 
 - HTTP 服务只监听本机回环地址。
