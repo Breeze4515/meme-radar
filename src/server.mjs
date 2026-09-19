@@ -4,13 +4,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeGmgnApiKey } from './gmgn-key-store.mjs';
 import { secondaryChainSupport } from './secondary.mjs';
+import { tokenKey } from './local-store.mjs';
+import { CHART_RISK_VERSION, applyRiskExclusion } from './chart-risk.mjs';
 
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const CHAIN_IDS = new Set(['sol', 'bsc', 'base', 'eth', 'robinhood', 'arc', 'stable']);
 const CHECK_FIELDS = [
   'openSource', 'ownerRenounced', 'lpLocked', 'notHoneypot', 'tax', 'rug',
   'concentration', 'dev', 'insider', 'bundler', 'sniper', 'wash', 'liquidity',
-  'wallets', 'observation'
+  'wallets', 'observation', 'chartRisk', 'marketBehavior'
 ];
 
 function finite(value, fallback = 0) {
@@ -114,9 +116,22 @@ function publicSecondary(source = {}) {
   };
 }
 
+export function voiceSnapshot(state, enabledChains) {
+  const scopes = { ...state.chainStates, [state.activeChain]: state };
+  return { chains: Object.fromEntries(enabledChains.filter(chain => CHAIN_IDS.has(chain)).map(chain => [chain,
+    (scopes[chain]?.candidates || []).slice(0, 200).map(row => ({ chain, address: text(row.address, 80),
+      status: text(row.status, 32), auditedAt: finite(row.auditedAt), staleAt: finite(row.staleAt),
+      qualified: row.status === 'X_REVIEW' && row.deep?.chainPass === true && !row.auditError
+        && row.auditHealth?.complete !== false && row.deep?.chartRisk?.pass === true
+        && row.deep?.chartRisk?.version === CHART_RISK_VERSION
+        && !state.riskExclusions?.[tokenKey(chain, row.address)]
+    }))])) };
+}
+
 function publicCandidate(row = {}) {
   const earlyExit = row.auditHealth?.earlyExit === true;
   const deep = row.deep || {};
+  const currentRules = deep.chartRisk?.version === CHART_RISK_VERSION;
   const security = deep.security || {};
   const wallets = deep.wallets || {};
   const observation = deep.observation || {};
@@ -141,15 +156,19 @@ function publicCandidate(row = {}) {
     sells: finite(row.sells),
     twitter: text(row.twitter, 80),
     gmgnUrl: externalUrl(row.gmgnUrl),
-    status: text(row.status, 32),
+    status: ['X_REVIEW', 'QUALIFIED'].includes(row.status) && !currentRules ? 'WAIT_RECHECK' : text(row.status, 32),
     auditedAt: finite(row.auditedAt),
     staleAt: finite(row.staleAt),
     reviewRevision: text(row.reviewRevision, 64),
     auditHealth: { earlyExit },
     auditError: row.auditError ? '深度审计暂时失败，已进入等待复查。' : '',
-    decisionReason: text(row.decisionReason, 120),
+    decisionReason: ['X_REVIEW', 'QUALIFIED'].includes(row.status) && !currentRules
+      ? '风险规则已升级，等待重新核验' : text(row.decisionReason, 120),
     deep: {
-      chainPass: deep.chainPass === true,
+      chainPass: deep.chainPass === true && currentRules,
+      chartRisk: { version: finite(deep.chartRisk?.version), status: text(deep.chartRisk?.status, 32),
+        pass: deep.chartRisk?.pass === true, from: finite(deep.chartRisk?.from), to: finite(deep.chartRisk?.to),
+        reasons: (deep.chartRisk?.reasons || []).slice(0, 5).map(reason => text(reason, 100)) },
       failed: Array.isArray(deep.failed) ? deep.failed.slice(0, 32).map(value => text(value, 40)) : [],
       unknownFields: Array.isArray(deep.unknownFields) ? deep.unknownFields.slice(0, 48).map(value => text(value, 64)) : [],
       blockingUnknownFields: Array.isArray(deep.blockingUnknownFields) ? deep.blockingUnknownFields.slice(0, 48).map(value => text(value, 64)) : [],
@@ -396,7 +415,8 @@ export function toPublicStatus(source = {}) {
     supportedChains: Array.isArray(source.supportedChains)
       ? source.supportedChains.slice(0, CHAIN_IDS.size).map(value => text(value, 32)).filter(value => CHAIN_IDS.has(value))
       : [],
-    candidates: Array.isArray(source.candidates) ? source.candidates.slice(0, 100).map(publicCandidate) : [],
+    candidates: Array.isArray(source.candidates) ? source.candidates.slice(0, 100)
+      .map(row => publicCandidate(applyRiskExclusion(row, source.riskExclusions, activeChain))) : [],
     rejected: Array.isArray(source.rejected) ? source.rejected.slice(0, 100).map(publicRejected) : [],
     events: Array.isArray(source.events) ? source.events.slice(0, 100).map(publicEvent) : [],
     xCapability: {
@@ -491,7 +511,16 @@ export function isTrustedLocalRequest(req, settings) {
   }
 
   const fetchSite = String(req.headers?.['sec-fetch-site'] || '').toLowerCase();
-  return !fetchSite || fetchSite === 'same-origin' || fetchSite === 'none';
+  if (!fetchSite || fetchSite === 'same-origin' || fetchSite === 'none') return true;
+  // A link from another website/app is a cross-site top-level navigation, not
+  // a cross-origin API request. Only the static landing document is public in
+  // this narrow case; loopback, Host and explicit Origin checks still apply.
+  if (!['cross-site', 'same-site'].includes(fetchSite) || req.method !== 'GET'
+    || req.headers?.['sec-fetch-mode'] !== 'navigate' || req.headers?.['sec-fetch-dest'] !== 'document') return false;
+  try {
+    const target = new URL(req.url, `http://${host}`);
+    return target.origin === `http://${host}` && ['/', '/index.html'].includes(target.pathname);
+  } catch { return false; }
 }
 
 export function healthSnapshot(source = {}, settings, now = Date.now()) {
@@ -605,9 +634,9 @@ export function createServer({ state, settings, controls, switchChain, saveGmgnK
         const scope = state.value.activeChain === body.chain ? state.value : state.value.chainStates?.[body.chain] || {};
         const key = address => body.chain === 'sol' ? address : address.toLowerCase();
         const audits = new Map((scope.candidates || []).map(row => [key(row.address), row]));
-        snapshot.rows = snapshot.rows.map(row => {
+        snapshot.rows = snapshot.rows.filter(row => !state.value.riskExclusions?.[tokenKey(body.chain, row.address)]).map(row => {
           const audit = audits.get(key(row.address));
-          return { ...row, audit: audit ? { status: text(audit.status, 32), at: finite(audit.auditedAt) } : null };
+          return { ...row, audit: audit ? { status: publicCandidate(audit).status, at: finite(audit.auditedAt) } : null };
         });
         return sendJson(res, 200, snapshot, csp);
       } catch (error) {
@@ -736,7 +765,7 @@ export function createServer({ state, settings, controls, switchChain, saveGmgnK
       if (chain && !CHAIN_IDS.has(chain)) return sendJson(res, 400, { error: 'unsupported_chain' }, csp);
       const selected = chain && chain !== state.value.activeChain
         ? { status: 'STARTING', candidates: [], ...state.value.chainStates?.[chain], activeChain: chain,
-          supportedChains: state.value.supportedChains, events: state.value.events,
+          supportedChains: state.value.supportedChains, events: state.value.events, riskExclusions: state.value.riskExclusions,
           policy: { ...state.value.policy, chain }, scanInProgress: false }
         : state.value;
       const annotations = Object.fromEntries(Object.entries(controls?.value.annotations || {}).slice(0, 500).map(([key, value]) => [key, {
@@ -744,6 +773,7 @@ export function createServer({ state, settings, controls, switchChain, saveGmgnK
         note: publicMessage(value.note, '[redacted]', 500), updatedAt: finite(value.updatedAt)
       }]));
       const output = { ...toPublicStatus(selected), gmgnConnection, annotations,
+        voiceSnapshot: voiceSnapshot(state.value, controls?.value.enabledChains || [state.value.activeChain]),
         scheduler: { scanningChain: text(state.value.activeChain, 32), enabledChains: controls?.value.enabledChains || [state.value.activeChain],
           lastSuccessAt: finite(state.value.lastSuccessAt), status: text(state.value.status, 32) },
         coverage: Object.fromEntries([...CHAIN_IDS].map(id => [id, {
@@ -755,7 +785,7 @@ export function createServer({ state, settings, controls, switchChain, saveGmgnK
         const scopes = { ...state.value.chainStates, [state.value.activeChain]: state.value };
         output.exportedAt = Date.now();
         output.chains = Object.fromEntries(Object.entries(scopes).filter(([id]) => CHAIN_IDS.has(id)).map(([id, scope]) => [id, {
-          ...toPublicStatus({ ...scope, activeChain: id }),
+          ...toPublicStatus({ ...scope, activeChain: id, riskExclusions: state.value.riskExclusions }),
           outcomes: (scope.outcomes || []).slice(0, 1000).map(row => ({
             address: text(row.address, 128), symbol: publicMessage(row.symbol, '?', 30), chain: id,
             baselineAt: finite(row.baselineAt), baselinePrice: finiteOrNull(row.baselinePrice),
@@ -771,6 +801,17 @@ export function createServer({ state, settings, controls, switchChain, saveGmgnK
       return sendJson(res, 200, output, csp);
     }
     if (url.pathname === '/health') return sendJson(res, 200, healthSnapshot(state.value, settings), csp);
+    const assets = { '/voice-ui.mjs': ['voice-ui.mjs', 'text/javascript; charset=utf-8'],
+      '/voice-alerts.mjs': ['voice-alerts.mjs', 'text/javascript; charset=utf-8'],
+      '/voice-player.mjs': ['voice-player.mjs', 'text/javascript; charset=utf-8'] };
+    if (Object.hasOwn(assets, url.pathname)) {
+      const [relative, type] = assets[url.pathname];
+      try {
+        const content = fs.readFileSync(path.join(settings.publicDir, relative));
+        res.writeHead(200, { ...headers(type, csp), 'Content-Length': content.length });
+        return res.end(content);
+      } catch { return sendJson(res, 404, { error: 'asset_not_found' }, csp); }
+    }
     if (url.pathname === '/' || url.pathname === '/index.html') {
       res.writeHead(200, { ...headers('text/html; charset=utf-8', csp), 'Content-Length': Buffer.byteLength(dashboardHtml) });
       return res.end(dashboardHtml);

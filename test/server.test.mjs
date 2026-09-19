@@ -29,6 +29,25 @@ test('local request gate rejects foreign host, origin, fetch site and remote add
   assert.equal(isTrustedLocalRequest(request({ socket: { remoteAddress: '192.0.2.10' } }), settings), false);
 });
 
+test('external links may navigate to the static home page, never to APIs or embedded resources', () => {
+  const navigation = (url = '/', extra = {}) => request({ method: 'GET', url, ...extra,
+    headers: { origin: undefined, 'sec-fetch-site': 'cross-site', 'sec-fetch-mode': 'navigate',
+      'sec-fetch-dest': 'document', ...extra.headers } });
+  for (const url of ['/', '/index.html', '/?from=desktop']) assert.equal(isTrustedLocalRequest(navigation(url), settings), true);
+  assert.equal(isTrustedLocalRequest(navigation('/', { headers: { 'sec-fetch-site': 'same-site' } }), settings), true);
+  for (const url of ['/api/status', '/api/export', '/health', '/voice-ui.mjs', '/audio/candidate-found.wav', '//foreign.example/']) {
+    assert.equal(isTrustedLocalRequest(navigation(url), settings), false, url);
+  }
+  for (const headers of [
+    { 'sec-fetch-dest': 'iframe' }, { 'sec-fetch-mode': 'cors' }, { 'sec-fetch-mode': 'no-cors' },
+    { 'sec-fetch-dest': 'image' }, { 'sec-fetch-mode': undefined }, { origin: 'null' },
+    { origin: 'https://foreign.example' }, { origin: 'http://localhost:3791' },
+    { host: 'foreign.example' }, { host: '127.0.0.1:9999' }, { 'sec-fetch-site': 'invalid' }
+  ]) assert.equal(isTrustedLocalRequest(navigation('/', { headers }), settings), false);
+  for (const method of ['POST', 'PUT', 'DELETE', 'HEAD']) assert.equal(isTrustedLocalRequest(navigation('/', { method }), settings), false);
+  assert.equal(isTrustedLocalRequest(navigation('/', { socket: { remoteAddress: '192.0.2.1' } }), settings), false);
+});
+
 test('public status is a field allowlist and removes raw provider and queue details', () => {
   const result = toPublicStatus({
     version: 2,
@@ -158,6 +177,15 @@ test('HTTP handler enforces local boundary, strong CSP and only safe local confi
   assert.match(page.headers['content-security-policy'], /script-src 'self' 'sha256-/);
   assert.match(page.headers['content-security-policy'], /object-src 'none'/);
   assert.doesNotMatch(page.headers['content-security-policy'], /unsafe-inline/);
+
+  const navigationHeaders = { 'Sec-Fetch-Site': 'cross-site', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-Dest': 'document' };
+  const linkedPage = await dispatch(server, { headers: navigationHeaders });
+  assert.equal(linkedPage.status, 200);
+  assert.match(linkedPage.headers['content-type'], /text\/html/);
+  assert.equal((await dispatch(server, { pathName: '/api/status', headers: navigationHeaders })).status, 403);
+  assert.equal((await dispatch(server, { pathName: '/api/gmgn-key', method: 'POST', headers: navigationHeaders })).status, 403);
+  assert.equal((await dispatch(server, { headers: { ...navigationHeaders, 'Sec-Fetch-Dest': 'iframe' } })).status, 403);
+  assert.equal((await dispatch(server, { headers: { ...navigationHeaders, Origin: 'https://foreign.example' } })).status, 403);
 
   const foreign = await dispatch(server, { headers: { Host: 'attacker.example' } });
   assert.equal(foreign.status, 403);

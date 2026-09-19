@@ -1,4 +1,5 @@
 import { config } from './config.mjs';
+import { CHART_RISK_VERSION, applyRiskExclusion } from './chart-risk.mjs';
 import crypto from 'node:crypto';
 import { discoveryScreen, deepScreen, marketCap, createdAt } from './scoring.mjs';
 import { socialGate } from './social.mjs';
@@ -56,6 +57,11 @@ function cleanCandidate(row, defaultChain = '') {
   if (clean.status === 'QUALIFIED') clean.status = 'X_REVIEW';
   if (clean.status === 'REJECTED') clean.status = 'HARD_REJECT';
   if (!clean.chain && defaultChain) clean.chain = defaultChain;
+  if (clean.status === 'X_REVIEW' && clean.deep?.chartRisk?.version !== CHART_RISK_VERSION) {
+    clean.status = 'WAIT_RECHECK';
+    clean.deep = { ...clean.deep, chainPass: false };
+    clean.decisionReason = '风险规则已升级，等待重新核验';
+  }
   return clean;
 }
 
@@ -121,7 +127,7 @@ export function classifyDeepResult(deep, auditMeta = {}) {
       lpLocked: ['lockRate'], notHoneypot: ['honeypot', 'sellability.'], tax: ['buyTax', 'sellTax'],
       rug: ['rugRatio'], concentration: ['top10'], dev: ['devHold'], insider: ['insider'],
       bundler: ['bundler'], sniper: ['sniperHold'], wash: ['wash'], liquidity: ['liquidity'],
-      wallets: ['holders.'], observation: ['candles']
+      wallets: ['holders.'], observation: ['candles'], chartRisk: ['chartRisk.']
     }[name] || [];
     return [...unknown].some(field => prefixes.some(prefix => field === prefix || field.startsWith(prefix)));
   };
@@ -411,6 +417,7 @@ export class Scanner {
   }
 
   enqueueReview(chain, row) {
+    if (row?.address && this.state.value.riskExclusions?.[tokenKey(chain, row.address)]) return { accepted: false, reason: 'risk_excluded' };
     const enabled = this.controls?.value.enabledChains || [this.activeChain];
     if (!enabled.includes(chain)) return { accepted: false, reason: 'chain_not_scanning' };
     if (!row || !discoveryScreen(row, { ...this.config, chain }).pass) return { accepted: false, reason: 'outside_audit_scope' };
@@ -438,6 +445,7 @@ export class Scanner {
     const keyEpoch = this.gmgn.keyEpoch;
     const startedAt = Date.now();
     const prior = structuredClone(this.state.value);
+    const riskExclusions = prior.riskExclusions || (prior.riskExclusions = {});
     this.state.value.status = 'SCANNING';
     this.state.value.scanInProgress = true;
     this.state.value.cycleStartedAt = startedAt;
@@ -469,7 +477,12 @@ export class Scanner {
       // Current discovery wins over a queued preview snapshot when both exist.
       discovered = [...new Map([...reviewRequests.map(item => item.row), ...discovered].map(row => [addressKey(row.address), row])).values()];
       const discoveredByAddress = new Map(discovered.filter(row => row?.address).map(row => [addressKey(row.address), row]));
-      const screened = discovered.map(row => ({ row, screen: discoveryScreen(row, settings) }));
+      const screened = discovered.map(row => {
+        const screen = discoveryScreen(row, settings);
+        const held = riskExclusions[tokenKey(chain, row.address)];
+        if (held) { screen.pass = false; screen.reasons.push(...held.reasons); }
+        return { row, screen };
+      });
       const prequalified = screened.filter(item => item.screen.pass).sort((a, b) =>
         Number(b.screen.priorityBand) - Number(a.screen.priorityBand) || b.screen.score - a.screen.score
       );
@@ -482,7 +495,7 @@ export class Scanner {
         .map(row => ({ row: { address: row.address, symbol: row.symbol || row.address.slice(0, 6), name: row.name || '',
           price: row.price, market_cap: row.marketCap, liquidity: row.liquidity, creation_timestamp: row.createdAt, _monitorOnly: true },
           screen: { mc: num(row.marketCap), liquidity: num(row.liquidity), ageSec: num(row.ageSec), priorityBand: true, score: 0 } }));
-      const auditable = [...prequalified, ...monitors];
+      const auditable = [...prequalified, ...monitors].filter(item => !riskExclusions[tokenKey(chain, item.row.address)]);
       let auditQueue = buildQueue(prior.auditQueue, auditable, startedAt, settings);
       const availableAddresses = new Set(auditable.map(item => addressKey(item.row.address)));
       const queueByAddress = new Map(auditQueue.map(item => [addressKey(item.address), item]));
@@ -495,7 +508,17 @@ export class Scanner {
         selected.unshift(requested);
         selected.splice(settings.maxDeepAuditsPerCycle);
       }
-      const candidatesByAddress = new Map((prior.candidates || []).map(row => cleanCandidate(row, chain)).filter(Boolean).map(row => [addressKey(row.address), row]));
+      const candidatesByAddress = new Map((prior.candidates || []).map(row => cleanCandidate(row, chain)).filter(Boolean)
+        .map(row => [addressKey(row.address), applyRiskExclusion(row, riskExclusions, chain)]));
+      for (const { row, screen } of screened) {
+        const previous = candidatesByAddress.get(addressKey(row.address));
+        if (!screen.pass && previous?.status === 'X_REVIEW') {
+          // A newer adverse discovery fact must not wait for a deep-audit slot
+          // while an older approved snapshot remains eligible for alerts.
+          candidatesByAddress.set(addressKey(row.address), { ...previous, status: 'WAIT_RECHECK',
+            deep: { ...previous.deep, chainPass: false }, decisionReason: screen.reasons.join('；') });
+        }
+      }
       let outcomes = updateOutcomeTracking(
         prior.outcomes,
         discoveredByAddress,
@@ -529,6 +552,14 @@ export class Scanner {
             token.liquidity = visibleToken.liquidity = num(audit.info?.liquidity, token.liquidity);
           }
           const deep = deepScreen({ discovery: item.row, audit }, settings);
+          if (deep.chartRisk.status === 'REJECT') {
+            riskExclusions[tokenKey(chain, token.address)] = { chain, address: token.address,
+              at: Date.now(), version: CHART_RISK_VERSION, codes: deep.chartRisk.codes,
+              reasons: deep.chartRisk.reasons, from: deep.chartRisk.from, to: deep.chartRisk.to };
+            // Persist immediately so a later source failure cannot erase the evidence.
+            this.state.value.riskExclusions = riskExclusions;
+            this.state.save();
+          }
           const baseClassification = classifyDeepResult(deep, audit._meta || {});
           const primaryWebsite = String(first(audit.info?.link?.website, item.row.website, item.row.link?.website) || '');
           let secondary = null;
@@ -578,7 +609,7 @@ export class Scanner {
             deep,
             social,
             secondary,
-            decisionReason: [classification.secondaryReason, marketBehaviorReason].filter(Boolean).join('；'),
+            decisionReason: [...deep.chartRisk.reasons, classification.secondaryReason, marketBehaviorReason].filter(Boolean).join('；'),
             auditHealth: audit._meta || { complete: true, endpoints: {} },
             info: {
               twitter: social.twitter,

@@ -1,5 +1,5 @@
 import { normalizeList } from './gmgn.mjs';
-import { discoveryScreen } from './scoring.mjs';
+import { discoveryScreen, knownRiskReasons } from './scoring.mjs';
 import { config } from './config.mjs';
 
 const number = value => value === null || value === undefined || value === '' || typeof value === 'boolean'
@@ -30,6 +30,7 @@ export function normalizeLiveRows(input, chain, previous = [], at = Date.now(), 
   for (const raw of input.slice(0, 100)) {
     if (!raw || !addressValid(chain, raw.address) || (raw.chain && raw.chain !== chain)) continue;
     const address = identity(chain, raw.address);
+    if (knownRiskReasons(raw, config).length) continue;
     const mc = number(raw.market_cap), liquidity = number(raw.liquidity), created = number(raw.creation_timestamp);
     if (mc === null || mc < 10000 || mc > 500000 || liquidity === null || liquidity < 3000
       || created === null || created <= 0 || at / 1000 - created < 300) continue;

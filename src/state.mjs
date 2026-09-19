@@ -22,6 +22,7 @@ function defaultState() {
     pendingChain: '',
     supportedChains: ['sol', 'bsc', 'base', 'eth', 'robinhood', 'arc', 'stable'],
     chainStates: {},
+    riskExclusions: {},
     scanCount: 0,
     discoveredCount: 0,
     prequalifiedCount: 0,

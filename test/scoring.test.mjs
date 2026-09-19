@@ -193,11 +193,11 @@ test('sellability aligns seller evidence to a recent activity window and states 
   assert.equal(empiricalSellability({ info: { price: { sells_5m: 3, sells_24h: 20 } }, discovery: {}, traders: traders.map(row => ({ ...row, last_active_timestamp: nowSec - 600 })), nowSec }).pass, false);
 });
 
-test('deep screen accepts strict chain data with empirical sell evidence', () => {
+test('deep screen accepts strict chain data with empirical sell evidence and known DEV balance', () => {
   const holders = Array.from({ length: 10 }, (_, i) => ({ address: `0x${String(i + 1).padStart(40, '0')}`, addr_type: 0, buy_tx_count_cur: 1, is_new: false, is_suspicious: false, amount_percentage: .01, native_transfer: { from_address: `source-${i}` }, tags: [], maker_token_tags: [] }));
   const traders = Array.from({ length: 5 }, (_, i) => ({ address: `seller-${i}`, sell_tx_count_cur: 1, last_active_timestamp: nowSec - 60 }));
   const result = deepScreen({
-    discovery: { address, market_cap: 50_000, liquidity: 10_000, sells_24h: 20, rug_ratio: .1, top_10_holder_rate: .2, bundler_rate: .05, rat_trader_amount_rate: .05, top70_sniper_hold_rate: .02, is_wash_trading: false, creator_token_status: 'creator_close', lock_percent: .9 },
+    discovery: { address, market_cap: 50_000, liquidity: 10_000, sells_24h: 20, rug_ratio: .1, top_10_holder_rate: .2, bundler_rate: .05, rat_trader_amount_rate: .05, top70_sniper_hold_rate: .02, is_wash_trading: false, creator_token_status: 'creator_close', dev_team_hold_rate: 0, lock_percent: .9 },
     audit: { info: { liquidity: 10_000, price: { sells_5m: 3, sells_24h: 20 } }, security: { open_source: 'yes', owner_renounced: 'yes', buy_tax: .01, sell_tax: .01, rug_ratio: .1, top_10_holder_rate: .2, creator_token_status: 'creator_close', rat_trader_amount_rate: .05, bundler_trader_amount_rate: .05, top70_sniper_hold_rate: .02, is_wash_trading: false, lock_percent: .9 }, pool: { liquidity: 10_000 }, holders, traders, candles: candles() },
     nowMs: nowSec * 1000
   }, config);

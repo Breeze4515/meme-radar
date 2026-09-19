@@ -635,6 +635,10 @@
     .manage-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; align-items: center; }
     .manage-actions label { display: flex; gap: 6px; align-items: center; }
     .manage-actions input { accent-color: #4ead91; }
+    .voice-panel { padding: 12px 18px; margin: 16px 0; }
+    .voice-panel .manage-actions { margin: 0 0 6px; }
+    .voice-panel input[type="range"] { width: 110px; }
+    .voice-panel [hidden] { display: none; }
     .saved-row { padding: 10px 0; border-bottom: 1px solid #213a42; overflow-wrap: anywhere; }
     dialog { color-scheme: dark; background: #101e24; color: #d7e5e3; border: 1px solid #45646a; border-radius: 12px; max-width: 520px; width: 90vw; }
     dialog::backdrop { background: #0009; }
@@ -708,6 +712,16 @@
       <div id="liveRows" class="live-grid"><div class="empty" data-i18n="preparing">准备中</div></div>
     </section>
 
+    <section class="panel voice-panel" aria-label="Voice alerts">
+      <div class="manage-actions">
+        <strong id="voiceTitle">候选语音提醒</strong>
+        <button id="voiceEnable" type="button" class="mini-button">试听并开启</button>
+        <button id="voiceStop" type="button" class="mini-button" hidden>关闭</button>
+        <label><span id="voiceVolumeLabel">音量</span> <input id="voiceVolume" type="range" min="0" max="100" value="50" aria-label="Volume"></label>
+        <span id="voiceStatus" class="muted" role="status" aria-live="polite"></span>
+      </div>
+      <small id="voiceHelp" class="muted">只提醒新完成链上筛选的候选，仍需人工复核。</small>
+    </section>
     <section class="grid">
       <article class="panel wide manage-panel">
         <details id="manageDetails">
@@ -823,6 +837,7 @@
     <div class="manage-actions"><button id="closeGmgnOnboarding" class="mini-button" type="button" data-i18n="closeAction">关闭</button></div>
   </dialog>
 
+  <script type="module" src="/voice-ui.mjs"></script>
   <script>
     const byId = function (id) { return document.getElementById(id); };
     const supportedLocales = ['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'ar'];
@@ -1208,6 +1223,7 @@
       currentLocale = supportedLocales.includes(locale) ? locale : 'zh-CN';
       writeStorage('memeRadarLanguageV1', currentLocale);
       applyStaticTranslations();
+      window.dispatchEvent(new CustomEvent('radar-locale', { detail: currentLocale }));
       if (rerender) {
         if (lastData) render(lastData, true);
         else {
@@ -1532,6 +1548,8 @@
           if (!linkedKnown) add('同源资金持仓比例未知，不按安全处理');
           else if (Number(wallets.linkedHoldRate) > policy.maxLinkedHoldRate) add('同源资金持仓' + formatPercent(wallets.linkedHoldRate) + '，要求不超过' + formatPercent(policy.maxLinkedHoldRate));
           if (ordinaryKnown && botKnown && linkedKnown && Number(wallets.ordinaryCount) >= policy.minOrdinaryWallets && Number(wallets.botHoldRate) <= policy.maxBotHoldRate && Number(wallets.linkedHoldRate) <= policy.maxLinkedHoldRate) add('普通钱包综合检查未通过');
+        } else if (code === 'chartRisk') {
+          (deep.chartRisk && deep.chartRisk.reasons || ['形态数据待复核']).forEach(add);
         } else if (code === 'observation') {
           add(safeMessage(observation.reason, '5分钟盘面观察未通过') + '；5分钟涨跌' + formatPercent(observation.return5m) + '，最大回撤' + formatPercent(observation.maxDrawdown) + '，单根量能占比' + formatPercent(observation.volumeConcentration));
         } else add('存在尚未中文化的审计项，请在GMGN详情中复核');
@@ -2297,15 +2315,23 @@
       }
     }
 
+    let refreshSequence = 0, acceptedRefresh = 0;
     async function refresh() {
+      const requestSequence = ++refreshSequence, requestChain = viewChain;
       try {
         const response = await fetch('/api/status' + (viewChain ? '?chain=' + encodeURIComponent(viewChain) : ''), { cache: 'no-store', signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error(t('localOffline'));
         const data = await response.json();
+        if (requestSequence < acceptedRefresh || requestChain !== viewChain) return;
+        acceptedRefresh = requestSequence;
         serviceOnline = true;
         offlineSince = 0;
         render(data);
+        window.dispatchEvent(new CustomEvent('radar-snapshot', { detail: data.voiceSnapshot }));
       } catch {
+        if (requestSequence < acceptedRefresh || requestChain !== viewChain) return;
+        acceptedRefresh = requestSequence;
+        window.dispatchEvent(new CustomEvent('radar-offline'));
         if (!offlineSince) offlineSince = Date.now();
         if (Date.now() - offlineSince > 5 * 60000) desktopAlert('offline:' + offlineSince, t('failureAlert'), t('localOffline'), Date.now());
         serviceOnline = false;
