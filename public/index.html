@@ -702,7 +702,7 @@
 
     <details class="panel ave-settings">
       <summary>AVE API</summary>
-      <p data-i18n="aveApiHelp">只填一个 Key，分别检测行情和交易服务。不签名、不下单。</p>
+      <p data-i18n="aveApiHelp">检测行情和交易服务连接。不签名、不下单。</p>
       <form class="api-key-row" id="ave-key-form">
         <label for="ave-api-key">AVE API Key</label>
         <input id="ave-api-key" class="field" type="password" autocomplete="off" spellcheck="false" maxlength="1024" placeholder="API Key">
@@ -866,10 +866,10 @@
     const messages = {
       aveDataService: ['行情服务','行情服務','Market data','相場サービス','시세 서비스','خدمة بيانات السوق'],
       aveTradeService: ['交易服务（只读检查）','交易服務（唯讀檢查）','Trading service (read-only check)','取引サービス（読み取り確認）','거래 서비스 (읽기 전용 확인)','خدمة التداول (فحص للقراءة فقط)'],
-      aveApiHelp: ['只填一个 Key，分别检测行情和交易服务。不签名、不下单。','只填一個 Key，分別檢測行情和交易服務。不簽名、不下單。','One key, separate market-data and trading-service checks. No signing or orders.','キーは1つ。相場と取引サービスを別々に確認。署名・注文なし。','키 하나로 시세·거래 서비스를 각각 확인합니다. 서명·주문 없음.','مفتاح واحد لفحص خدمتي البيانات والتداول منفصلتين. دون توقيع أو أوامر.'],
+      aveApiHelp: ['检测行情和交易服务连接。不签名、不下单。','檢測行情和交易服務連線。不簽名、不下單。','Check market-data and trading-service connections. No signing or orders.','相場と取引サービスの接続を確認。署名・注文なし。','시세·거래 서비스 연결을 확인합니다. 서명·주문 없음.','فحص الاتصال بخدمتي البيانات والتداول. دون توقيع أو أوامر.'],
       aveApiCost: ['行情测试约 5 CU；交易服务仅查 Gas，不代表已具备下单能力。保存后可留空重测。','行情測試約 5 CU；交易服務僅查 Gas，不代表可下單。儲存後可留空重測。','Data check: about 5 CU. Trading check queries Gas only, not order permission. Leave blank to retest a saved key.','相場テスト約5 CU。取引テストはGas取得のみで、注文権限の確認ではありません。保存後は空欄で再テストできます。','시세 테스트 약 5 CU. 거래 테스트는 Gas 조회이며 주문 권한 확인이 아닙니다. 저장 후 빈칸으로 재테스트 가능.','اختبار البيانات نحو 5 CU. فحص التداول يستعلم Gas فقط ولا يؤكد صلاحية الطلبات. اتركه فارغًا لإعادة اختبار المفتاح المحفوظ.'],
       aveKeySaved: ['Key 已保存','Key 已儲存','Key saved','キー保存済み','키 저장됨','تم حفظ المفتاح'],
-      aveReentry: ['旧配置有两把不同 Key，请重新填写一个 AVE API Key','舊設定有兩把不同 Key，請重新填寫一個 AVE API Key','Two different legacy keys found. Enter one AVE API Key.','旧設定に異なるキーが2つあります。AVE APIキーを1つ入力してください。','기존 키 두 개가 다릅니다. AVE API 키 하나를 다시 입력하세요.','يوجد مفتاحان قديمان مختلفان. أدخل مفتاح AVE API واحدًا.'],
+      aveReentry: ['请重新填写并验证 AVE API Key','請重新填寫並驗證 AVE API Key','Re-enter and verify your AVE API Key.','AVE APIキーを再入力して検証してください。','AVE API 키를 다시 입력하고 확인하세요.','أعد إدخال مفتاح AVE API والتحقق منه.'],
       aveTest: ['保存 / 测试','儲存 / 測試','Save / test','保存 / テスト','저장 / 테스트','حفظ / اختبار'],
       aveRemove: ['移除 Key','移除 Key','Remove key','キーを削除','키 제거','إزالة المفتاح'],
       aveManage: ['API 管理','API 管理','API settings','API管理','API 관리','إدارة API'],
@@ -1087,9 +1087,9 @@
       switchFailed: ['链路切换失败，请稍后重试', '鏈路切換失敗，請稍後重試', 'Chain switch failed; try again later', '切替に失敗。後でもう一度お試しください', '체인 전환 실패; 나중에 다시 시도하세요', 'فشل تبديل الشبكة؛ حاول لاحقًا'],
       copyContract: ['复制合约', '複製合約', 'Copy contract', 'コントラクトをコピー', '계약 복사', 'نسخ العقد'],
       aveEntry: ['打开 AVE', '開啟 AVE', 'Open AVE', 'AVEを開く', 'AVE 열기', 'فتح AVE'],
-      aveEntryHint: ['AVE 邀请入口 · 复制 CA 后搜索', 'AVE 邀請入口 · 複製 CA 後搜尋', 'AVE invite · Copy the CA, then search', 'AVE招待リンク · CAをコピーして検索', 'AVE 초대 링크 · CA 복사 후 검색', 'رابط دعوة AVE · انسخ عنوان العقد ثم ابحث'],
+      aveEntryHint: ['打开 AVE · 复制 CA 后搜索', '開啟 AVE · 複製 CA 後搜尋', 'Open AVE · Copy the CA, then search', 'AVEを開く · CAをコピーして検索', 'AVE 열기 · CA 복사 후 검색', 'افتح AVE · انسخ عنوان العقد ثم ابحث'],
       aveTrade: ['AVE 交易','AVE 交易','Trade on AVE','AVEで取引','AVE 거래','تداول على AVE'],
-      aveTokenHint: ['直达代币 K 线与买卖 · 邀请码 0001','直達代幣 K 線與買賣 · 邀請碼 0001','Token chart & trading · Referral 0001','チャート・取引へ直行 · 招待コード0001','토큰 차트·거래로 바로 이동 · 초대 코드 0001','الرسم البياني وتداول العملة · رمز الدعوة 0001'],
+      aveTokenHint: ['查看代币 K 线与买卖','查看代幣 K 線與買賣','View token chart and trading','トークンのチャート・取引を表示','토큰 차트·거래 보기','عرض الرسم البياني وتداول العملة'],
       officialX: ['官方X账号', '官方X帳號', 'Official X', '公式X', '공식 X', 'حساب X الرسمي'],
       liveXSearch: ['X实时搜索', 'X即時搜尋', 'Live X search', 'Xリアルタイム検索', 'X 실시간 검색', 'بحث X المباشر'],
       visitWebsite: ['访问官网', '造訪官網', 'Visit website', '公式サイト', '공식 웹사이트', 'زيارة الموقع'],
