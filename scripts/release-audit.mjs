@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const excluded = new Set(['.git', '.runtime', 'node_modules']);
-const forbiddenEntries = ['state', 'logs', '.env', '.npmrc'];
+const forbiddenEntries = ['state', 'logs', '.local-data', '.env', '.npmrc'];
 const textExtensions = new Set(['', '.bat', '.command', '.css', '.html', '.js', '.json', '.md', '.mjs', '.sh', '.txt']);
 const findings = [];
 
@@ -16,9 +16,13 @@ function visit(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     if (excluded.has(entry.name)) continue;
     const absolute = path.join(directory, entry.name);
+    const relative = path.relative(root, absolute);
+    if (forbiddenEntries.includes(entry.name) || /^(?:ave-credentials\.json|gmgn-api-key|agent-private-key)$/i.test(entry.name)) {
+      findings.push(`不应发布本机配置或状态：${relative}`);
+      continue;
+    }
     if (entry.isDirectory()) { visit(absolute); continue; }
     if (!textExtensions.has(path.extname(entry.name).toLowerCase()) || entry.name === 'package-lock.json') continue;
-    const relative = path.relative(root, absolute);
     const content = fs.readFileSync(absolute, 'utf8');
     if (/\/(?:Users|home)\/[^/\s'"`]+\//.test(content) || /[A-Z]:\\Users\\[^\\\s'"`]+\\/i.test(content)) {
       findings.push(`包含个人电脑绝对路径：${relative}`);

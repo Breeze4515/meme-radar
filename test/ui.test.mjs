@@ -8,6 +8,49 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const html = fs.readFileSync(path.join(here, '..', 'public', 'index.html'), 'utf8');
 
+test('AVE opens token chart/trading with the author referral and never substitutes the pool or source URL', () => {
+  const start = html.indexOf('const AVE_INVITE_URL =');
+  const end = html.indexOf('function candidateRow', start);
+  const context = { t: key => key, escapeHtml: value => String(value).replaceAll('&', '&amp;'), safeUrl: () => '', officialXHandle: () => '' };
+  vm.runInNewContext(html.slice(start, end) + ';this.links = actionLinks;this.tokenUrl = aveTokenUrl;', context);
+  for (const chain of ['bsc', 'robinhood', 'arc', 'sol']) {
+    const address = chain === 'sol' ? 'So11111111111111111111111111111111111111112' : '0x059ecb64e45b6211f1390d5f28cc909203ca7777';
+    const links = context.links({ chain, address, pairAddress: 'wrong-pool', gmgnUrl: 'https://gmgn.ai/override' });
+    assert.ok(links.includes('https://pro.ave.ai/token/' + address + '-' + (chain === 'sol' ? 'solana' : chain) + '?ref=0001'));
+    assert.ok(links.includes('aveTrade')); assert.doesNotMatch(links, /wrong-pool/);
+    assert.match(links, /data-action="copy"/); assert.doesNotMatch(links, /gmgn.ai/);
+  }
+  for (const row of [{ chain:'unknown',address:'0x059ecb64e45b6211f1390d5f28cc909203ca7777' },
+    { chain:'bsc',address:'not-a-ca' }, { chain:'bsc',address:'0x059ecb64e45b6211f1390d5f28cc909203ca7777?ref=evil' }]) {
+    assert.equal(context.tokenUrl(row.chain,row.address), null);
+    assert.match(context.links(row), /https:\/\/share\.ave\.ai\?lang=zh-cn&amp;code=0001/);
+    assert.doesNotMatch(context.links(row), /pro\.ave\.ai/);
+  }
+  assert.match(html, /id="ave-api-key"[^>]*type="password"/);
+  assert.doesNotMatch(html, /ave-data-key|ave-trade-key|data-ave-kind/);
+  const connector = html.slice(html.indexOf('let aveBusy'), html.indexOf('async function refresh()'));
+  assert.doesNotMatch(connector, /localStorage|sessionStorage|window.open|privateKey|signTransaction/);
+});
+
+test('AVE failed retest updates both service badges while retaining the failure notice', async () => {
+  const elements = Object.fromEntries(['ave-api-key', 'ave-config-status', 'ave-data-status', 'ave-trade-status']
+    .map(id => [id, { dataset: {}, textContent: '', value: '' }]));
+  const context = {
+    byId: id => elements[id], t: key => key,
+    document: { querySelectorAll: () => [] }, AbortSignal,
+    fetch: async () => ({ ok: false, json: async () => ({ error: 'AVE_CHECK_FAILED',
+      ave: { configured: true, data: { configured: true, status: 'error' }, trade: { configured: true, status: 'error' } } }) }),
+  };
+  vm.runInNewContext(html.slice(html.indexOf('let aveBusy'), html.indexOf('async function refresh()'))
+    + ';this.change = changeAve;this.render = renderAveConnection;', context);
+  context.render({ configured: true, data: { status: 'connected' }, trade: { status: 'connected' } });
+  assert.equal(elements['ave-data-status'].textContent, 'aveChecked');
+  await context.change('configure');
+  assert.equal(elements['ave-data-status'].textContent, 'aveFailed');
+  assert.equal(elements['ave-trade-status'].textContent, 'aveFailed');
+  assert.match(elements['ave-config-status'].textContent, /AVE_CHECK_FAILED/);
+});
+
 test('所有内联脚本均可通过语法解析', () => {
   const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
   assert.ok(scripts.length >= 2);

@@ -14,7 +14,8 @@
 - “即时发现”读取 1 分钟活跃榜，目标约每 20 秒刷新；严格深度审计独立运行，不用即时热度冒充安全结论。
 - 综合查看合约权限、LP、税率/貔貅风险、持仓结构、普通钱包代理样本、聪明钱、5 分钟盘面与价格行为；未知字段不会假装通过。
 - GoPlus 与 DexScreener 在已支持链上补充合约风险、市值、流动性和官网交叉验证，并明确标记数据缺失或冲突。
-- 候选币可直接打开官网、GMGN 和 X，由使用者人工核验叙事与社区；雷达不会因社交热度自动下单。
+- 候选币一键直达 AVE 对应代币的 K 线与买卖页，并保留作者邀请码；官网和 X 入口继续用于人工复核，雷达不会自动下单。
+- AVE 只需填写一个 API Key，可分别检查行情与交易服务连接；连接测试不签名、不下单。
 - 提供收藏、备注、桌面提醒、筛选记录导出，以及 5 分钟至 24 小时的影子表现跟踪。
 - 中文语音提醒新完成链上筛选的候选，优先使用设备上的中文女声；支持音量、关闭和跨标签去重，无需语音 API Key。
 - 排除已知低流动性、高税、DEV 集中持仓与已观测暴拉平台/持续暴跌；缺少行情证据继续等待，不补成安全。
@@ -22,15 +23,15 @@
 
 ## 下载
 
-- [Windows x64 一键便携版](https://github.com/nhovongoc0-max/meme-radar/releases/download/v0.1.7/MemeRadar-OpenSource-Windows-x64-0.1.7.zip)
-- [macOS 版](https://github.com/nhovongoc0-max/meme-radar/releases/download/v0.1.7/MemeRadar-OpenSource-macOS-0.1.7.zip)
+- [Windows x64 一键便携版](https://github.com/nhovongoc0-max/meme-radar/releases/download/v0.1.8/MemeRadar-OpenSource-Windows-x64-0.1.8.zip)
+- [macOS 版](https://github.com/nhovongoc0-max/meme-radar/releases/download/v0.1.8/MemeRadar-OpenSource-macOS-0.1.8.zip)
 
 也可以在 [Releases](https://github.com/nhovongoc0-max/meme-radar/releases) 页面查看版本说明与文件校验值。
 
 ## 安全边界
 
 - HTTP 服务只监听本机回环地址。
-- 设置接口仅用于扫描链、收藏备注、保存或断开本机 GMGN API Key；不提供任何交易接口。
+- 设置接口用于扫描链、收藏备注、保存或断开本机 GMGN/AVE API Key；AVE 只做用户触发的连接测试，不提供任何签名或下单接口。
 - GMGN API Key 只写入本项目 `state/gmgn-api-key`；创建 API 所需的 Ed25519 认证私钥只写入本项目的受限状态文件（目录 `0700`、文件 `0600`）。API Key 和私钥都不进入命令参数、状态 JSON、日志、HTTP 响应或浏览器存储，页面只会取得可公开上传的公钥。
 - 浏览器只获取经过字段白名单过滤的状态，不返回上游原始响应。
 - 未知或无法解析的风险字段不应被视为通过。
@@ -54,6 +55,10 @@
 3. 首次运行会检查 Node.js；缺少兼容环境时会从 nodejs.org 下载项目专用版本并校验 SHA-256，然后安装固定依赖并打开浏览器。
 
 ### 连接 GMGN
+
+GMGN 继续只做扫描和风险线索。代币旁的 **AVE 交易** 携带作者邀请码 `0001`，一键打开该币的 K 线与买卖页，无需先经过分享首页。支持已核实链标识（包括 BSC、Robinhood、Arc、Solana）；缺少有效 CA 或未配置链映射时保留 [AVE 邀请入口](https://share.ave.ai?lang=zh-cn&code=0001)，复制 CA 后搜索。链接携带邀请码不保证已有账户改绑或最终返佣；打开页面不会自动下单。
+
+页面的 **AVE API** 折叠区只需填写一个 AVE API Key，系统分别测试行情和交易服务。行情测试一次约 5 CU，交易服务只读取 Gas 建议，不签名、不下单。至少一项通过后保存到本机受限权限的 `state/ave-credentials.json`，其他服务未通过会单独显示；两项都失败保留旧 Key。不回显、不进浏览器缓存，不上传钱包私钥。旧版相同或单边 Key 自动兼容，旧版两把 Key 不同时需重填一个。连接成功不等于可下单，本版没有钱包签名或自动交易接口。
 
 1. 页面打开后点击 **首次使用 / 创建 API**，雷达会在本机生成本次 Agent 公钥。
 2. 复制该公钥，按按钮打开 GMGN 创建 API 页面并粘贴公钥。

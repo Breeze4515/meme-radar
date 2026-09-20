@@ -155,6 +155,23 @@ function dispatch(server, { method = 'GET', pathName = '/', headers = {}, body =
   });
 }
 
+test('AVE configuration is local-only, requires same-origin JSON and never opens trading routes', async () => {
+  let calls = 0;
+  const snapshot = { data: { configured: true }, trade: { configured: false }, executionReady: false };
+  const server = createServer({ settings, state: { value: {} }, ave: { snapshot: () => snapshot, configure: async () => { calls++; return snapshot; }, remove: () => { calls++; return snapshot; } } });
+  for (const pathName of ['/api/ave-configure', '/api/ave-remove']) {
+    assert.equal((await dispatch(server, { method: 'POST', pathName, body: '{}' })).status, 403);
+    assert.equal((await dispatch(server, { method: 'POST', pathName, headers: { origin: 'https://evil.invalid', 'content-type': 'application/json' }, body: '{}' })).status, 403);
+    assert.equal((await dispatch(server, { method: 'POST', pathName, headers: { origin: 'http://127.0.0.1:3791', 'content-type': 'text/plain' }, body: '{}' })).status, 415);
+  }
+  assert.equal(calls, 0);
+  const response = await dispatch(server, { method: 'POST', pathName: '/api/ave-configure', headers: { origin: 'http://127.0.0.1:3791', 'content-type': 'application/json' }, body: JSON.stringify({ key: 'fixture-not-real' }) });
+  assert.equal(response.status, 200); assert.equal(calls, 1);
+  assert.deepEqual(JSON.parse(response.body), { ave: snapshot });
+  const trading = await dispatch(server, { method: 'POST', pathName: '/api/ave-submit', headers: { origin: 'http://127.0.0.1:3791' } });
+  assert.equal(trading.status, 405);
+});
+
 test('HTTP handler enforces local boundary, strong CSP and only safe local configuration writes', async () => {
   let switchedTo = '';
   let savedKey = '';

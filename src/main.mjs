@@ -2,6 +2,7 @@
 import { config } from './config.mjs';
 import { GmgnClient } from './gmgn.mjs';
 import { GmgnKeyStore } from './gmgn-key-store.mjs';
+import { createAveSettings } from './ave-settings.mjs';
 import { GmgnConnection } from './gmgn-connection.mjs';
 import { RadarState } from './state.mjs';
 import { Scanner } from './scanner.mjs';
@@ -23,6 +24,9 @@ if (process.platform === 'win32') {
 const once = process.argv.includes('--once');
 const state = new RadarState(config.stateDir);
 const keyStore = new GmgnKeyStore(config.stateDir);
+let ave;
+try { ave = createAveSettings({ directory: config.stateDir }); }
+catch { console.error('AVE 本机配置无法读取；原文件保留，GMGN 扫描不受影响。'); }
 // Community installations must be explicit: never inherit an API key from the
 // user's shell or a pre-existing global GMGN CLI configuration.
 const gmgn = new GmgnClient({
@@ -44,6 +48,7 @@ if (once) {
 }
 
 const server = createServer({
+  ave,
   state,
   controls,
   liveDiscovery,

@@ -6,6 +6,7 @@ import { normalizeGmgnApiKey } from './gmgn-key-store.mjs';
 import { secondaryChainSupport } from './secondary.mjs';
 import { tokenKey } from './local-store.mjs';
 import { CHART_RISK_VERSION, applyRiskExclusion } from './chart-risk.mjs';
+import { AveError } from './ave-settings.mjs';
 
 const LOOPBACK_ADDRESSES = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const CHAIN_IDS = new Set(['sol', 'bsc', 'base', 'eth', 'robinhood', 'arc', 'stable']);
@@ -599,7 +600,7 @@ function allowedChainIds(supportedChains) {
   return new Set(configured.length ? configured : CHAIN_IDS);
 }
 
-export function createServer({ state, settings, controls, switchChain, saveGmgnKey, disconnectGmgnKey, getGmgnOnboarding, getGmgnConnection, liveDiscovery, enqueueReview, supportedChains = [] }) {
+export function createServer({ state, settings, controls, switchChain, saveGmgnKey, disconnectGmgnKey, getGmgnOnboarding, getGmgnConnection, liveDiscovery, enqueueReview, ave, supportedChains = [] }) {
   const dashboard = path.join(settings.publicDir, 'index.html');
   const dashboardHtml = fs.readFileSync(dashboard, 'utf8');
   const csp = contentSecurityPolicy(dashboardHtml);
@@ -614,6 +615,17 @@ export function createServer({ state, settings, controls, switchChain, saveGmgnK
       url = new URL(req.url, `http://127.0.0.1:${settings.port}`);
     } catch {
       return sendJson(res, 400, { error: 'bad_request' }, csp);
+    }
+
+    if (url.pathname === '/api/ave-status' && req.method === 'GET') return sendJson(res, ave ? 200 : 503, ave ? { ave: ave.snapshot() } : { error: 'ave_unavailable' }, csp);
+    if (req.method === 'POST' && ['/api/ave-configure', '/api/ave-remove'].includes(url.pathname)) {
+      if (!req.headers.origin) return sendJson(res, 403, { error: 'local_request_required' }, csp);
+      if (!ave) return sendJson(res, 503, { error: 'ave_unavailable' }, csp);
+      try {
+        const body = await readSmallJson(req, 4096);
+        const result = url.pathname.endsWith('configure') ? await ave.configure(body) : ave.remove(body);
+        return sendJson(res, 200, { ave: result }, csp);
+      } catch (e) { return sendJson(res, e instanceof AveError ? e.status : e.statusCode || 503, { error: e instanceof AveError ? e.code : 'AVE_STORAGE', ave: ave.snapshot() }, csp); }
     }
 
     if (req.method === 'POST' && ['/api/live-discovery', '/api/live-review'].includes(url.pathname)) {
